@@ -281,3 +281,47 @@ Template: `docs/adr/000-template.md`.
 | 013 | Plain Xcode + local SPM; Tuist at team scale | Tuist from day one |
 | 014 | Swift 6 strict concurrency everywhere | Swift 5 mode in some modules |
 | 015 | OSLog + Sentry with scrubbing | Firebase Crashlytics |
+
+## 10. Build plan (10 weeks)
+
+Run each phase with `/phase <n>`. Review every diff before committing.
+
+### Phase 1 (week 1): Repo skeleton
+- Task: Create Xcode app project `Wallet` (iOS 17) and local package `WalletKit` with every module from section 3. Each module gets a placeholder type and one passing test. Add `.swiftlint.yml`, `.swift-format`, and `.github/workflows/pr.yml`.
+- Done when: app builds and launches; `swift test` passes; CI green on a PR; importing one feature into another fails to build.
+
+### Phase 2 (week 2): Domain + design system
+- Task: `Money`, `Currency`, `FXRate`, transfer state machine in Domain with full tests. DesignSystem tokens and components: `AmountText`, `AmountField`, `PrimaryButton`, `TransactionRow`, `PINPad`, with previews.
+- Done when: rounding tests cover JPY (0), SGD (2), KWD (3); every state transition pair tested; components preview in dark mode and largest Dynamic Type.
+
+### Phase 3 (week 3): Backend + networking
+- Task: Vapor backend per section 7 with seed data and simulation headers. `Networking`: `APIClient`, interceptor chain (auth, idempotency, retry with backoff, request ID), DTOs.
+- Done when: backend tests pass; a retried POST reuses the same idempotency key.
+
+### Phase 4 (week 4): Accounts + offline cache
+- Task: AccountsFeature (balances per currency, paginated history, pull to refresh). Persistence with SwiftData and `.complete` protection; offline balances with "last updated".
+- Done when: airplane mode still shows cached balances; VoiceOver reads amounts with currency.
+
+### Phase 5 (week 5): Auth + session
+- Task: AuthFeature and `KeychainStore`: sandbox login, Face ID with PIN fallback, token refresh, inactivity auto-lock, background blur.
+- Done when: tokens only in Keychain; app locks after timeout; app switcher shows no balances.
+
+### Phase 6 (week 6): Transfer flow + outbox
+- Task: TransferFeature: recipient → amount → live quote with fee breakdown and 30 s countdown → review → confirm → result. `TransferOutbox` actor resuming on launch.
+- Done when: double-tap Send creates one transfer; expiry re-quotes visibly; killing the app mid-transfer resumes on relaunch.
+
+### Phase 7 (week 7): Secure Enclave signing + App Attest
+- Task: Device binding and transaction signing per section 6 on iOS and backend. Public-key pinning with backup pin.
+- Done when: backend rejects tampered amount, reused nonce, expired nonce; changing Face ID enrolment forces re-binding.
+
+### Phase 8 (week 8): IdentitySDK
+- Task: Standalone package: MRZ input, BAC/PACE, read DG1 + DG2, passive authentication. Async public API, typed errors, DocC tutorial, sample app. Wire into OnboardingFeature.
+- Done when: a real passport reads on device; SDK builds alone; DocC builds without warnings.
+
+### Phase 9 (week 9): Production hardening
+- Task: Sentry with scrubbing, per-module loggers, screen-recording masking, feature flags with remote kill switch for transfers, Simplified Chinese, XCUITest flows, `release.yml` + Fastlane → TestFlight.
+- Done when: a tag produces a TestFlight build; UI tests pass in CI; no PII in a forced test crash.
+
+### Phase 10 (week 10): Portfolio polish
+- Task: README as case study (problem, architecture diagram, security decisions linking ADRs, tradeoffs, changes at scale). Draft `docs/threat-model.md`.
+- Done when: 90-second demo recorded; TestFlight link public; README reviewed; first blog post drafted by the owner.
