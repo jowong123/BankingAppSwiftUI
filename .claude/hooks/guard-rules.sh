@@ -29,10 +29,10 @@ if re.search(r"\b(amount|balance|fee|price|total)\w*\s*:\s*(Double|Float|CGFloat
 
 # Secrets never in UserDefaults.
 if re.search(r"UserDefaults[^\n]*(token|secret|password|pin|key)", text, re.I):
-    problems.append("Sensitive value stored in UserDefaults. Use Security/KeychainStore.")
+    problems.append("Sensitive value stored in UserDefaults. Use WalletSecurity/KeychainStore.")
 
-# print is banned (use Logger).
-if not is_test and re.search(r"(^|[^\w.])print\(", text):
+# print is banned everywhere, tests included (use Logger, or #expect messages in tests).
+if re.search(r"(^|[^\w.])print\(", text):
     problems.append("print() is banned. Use Logger from Observability with privacy: .private.")
 
 # No try! outside tests.
@@ -49,7 +49,7 @@ if m:
 
 # IdentitySDK must not import WalletKit modules.
 if "/Sources/IdentitySDK/" in path:
-    banned = {"Domain","DesignSystem","Navigation","Networking","Security","Persistence","Observability"}
+    banned = {"Domain","DesignSystem","Navigation","Networking","WalletSecurity","Persistence","Observability"}
     for imp in re.findall(r"^\s*import\s+(\w+)", text, re.M):
         if imp in banned:
             problems.append(f"IdentitySDK imports {imp}. The SDK must build alone.")
