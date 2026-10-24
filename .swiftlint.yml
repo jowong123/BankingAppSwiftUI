@@ -1,0 +1,61 @@
+# SwiftLint config. Formatting (indentation, wrapping) is swift-format's job;
+# SwiftLint covers correctness and the project's hard rules in CLAUDE.md.
+
+included:
+  - Wallet
+  - WalletTests
+  - WalletUITests
+  - WalletKit/Sources
+  - WalletKit/Tests
+
+excluded:
+  - WalletKit/.build
+  - backend/.build
+
+# Rules swift-format already owns.
+disabled_rules:
+  - trailing_comma
+  - opening_brace
+  - line_length
+
+opt_in_rules:
+  - force_unwrapping
+  - implicitly_unwrapped_optional
+  - fatal_error_message
+  - discouraged_optional_boolean
+  - empty_count
+  - first_where
+  - private_swiftui_state
+  - unowned_variable_capture
+
+force_cast: error
+force_try: error
+force_unwrapping: error
+
+custom_rules:
+  no_print:
+    name: "print is banned"
+    regex: '(^|[^\w.])(print|debugPrint|dump)\('
+    match_kinds: identifier
+    message: "Use Logger from Observability with privacy: .private."
+    severity: error
+  no_double_money:
+    name: "Money as Double/Float"
+    regex: '(?i)\b(amount|balance|fee|price|total)\w*\s*:\s*(Double|Float|CGFloat)\b'
+    message: "Use Money (Decimal) from Domain; amountMinor: Int64 at the API boundary."
+    severity: error
+  no_unchecked_sendable:
+    name: "Unchecked Sendable without ADR"
+    regex: '(@unchecked\s+Sendable|nonisolated\(unsafe\))(?![^\n]*ADR-\d{3})'
+    message: "Add a comment on the same line linking the ADR that allows this."
+    severity: error
+  no_shared_singleton:
+    name: "Singleton"
+    regex: 'static\s+(let|var)\s+shared\b'
+    message: "No singletons. Inject through initialisers."
+    severity: error
+  no_userdefaults_secrets:
+    name: "Secret in UserDefaults"
+    regex: '(?i)UserDefaults[^\n]*(token|secret|password|pin|key)'
+    message: "Use WalletSecurity/KeychainStore."
+    severity: error

@@ -1,0 +1,52 @@
+name: PR
+
+on:
+  pull_request:
+  push:
+    branches: [main, develop]
+
+permissions:
+  contents: read
+
+concurrency:
+  group: pr-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  lint:
+    runs-on: macos-26
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v4
+      - name: Install SwiftLint
+        run: brew install swiftlint
+      - name: SwiftLint
+        run: swiftlint lint --strict --reporter github-actions-logging
+      - name: swift-format
+        run: >
+          swift format lint --strict --recursive
+          Wallet WalletTests WalletUITests WalletKit/Sources WalletKit/Tests WalletKit/Package.swift
+
+  package:
+    runs-on: macos-26
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v4
+      - name: swift test
+        working-directory: WalletKit
+        run: swift test --explicit-target-dependency-import-check error
+      - name: Module boundaries
+        run: scripts/check-module-boundaries.sh
+
+  app:
+    runs-on: macos-26
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@v4
+      - name: Build app
+        run: >
+          xcodebuild build
+          -project Wallet.xcodeproj
+          -scheme Wallet
+          -destination 'generic/platform=iOS Simulator'
+          CODE_SIGNING_ALLOWED=NO
