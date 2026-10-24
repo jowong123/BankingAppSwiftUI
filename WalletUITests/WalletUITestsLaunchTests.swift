@@ -1,13 +1,13 @@
 //
-//  BankingAppSwiftUIUITestsLaunchTests.swift
-//  BankingAppSwiftUIUITests
+//  WalletUITestsLaunchTests.swift
+//  WalletUITests
 //
 //  Created by jw on 22/10/2026.
 //
 
 import XCTest
 
-final class BankingAppSwiftUIUITestsLaunchTests: XCTestCase {
+final class WalletUITestsLaunchTests: XCTestCase {
 
     override class var runsForEachTargetApplicationUIConfiguration: Bool {
         true

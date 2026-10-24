@@ -1,6 +1,6 @@
 //
-//  BankingAppSwiftUIApp.swift
-//  BankingAppSwiftUI
+//  WalletApp.swift
+//  Wallet
 //
 //  Created by jw on 22/10/2026.
 //
@@ -9,7 +9,7 @@ import SwiftUI
 import SwiftData
 
 @main
-struct BankingAppSwiftUIApp: App {
+struct WalletApp: App {
     var sharedModelContainer: ModelContainer = {
         let schema = Schema([
             Item.self,

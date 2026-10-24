@@ -1,6 +1,6 @@
 //
 //  Item.swift
-//  BankingAppSwiftUI
+//  Wallet
 //
 //  Created by jw on 22/10/2026.
 //
