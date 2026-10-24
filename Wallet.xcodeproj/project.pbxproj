@@ -6,6 +6,20 @@
 	objectVersion = 77;
 	objects = {
 
+/* Begin PBXBuildFile section */
+		CB45A1000000000000000000 /* Domain in Frameworks */ = {isa = PBXBuildFile; productRef = CB45A2000000000000000000 /* Domain */; };
+		CB45A1000000000000000001 /* DesignSystem in Frameworks */ = {isa = PBXBuildFile; productRef = CB45A2000000000000000001 /* DesignSystem */; };
+		CB45A1000000000000000002 /* Navigation in Frameworks */ = {isa = PBXBuildFile; productRef = CB45A2000000000000000002 /* Navigation */; };
+		CB45A1000000000000000003 /* Networking in Frameworks */ = {isa = PBXBuildFile; productRef = CB45A2000000000000000003 /* Networking */; };
+		CB45A1000000000000000004 /* WalletSecurity in Frameworks */ = {isa = PBXBuildFile; productRef = CB45A2000000000000000004 /* WalletSecurity */; };
+		CB45A1000000000000000005 /* Persistence in Frameworks */ = {isa = PBXBuildFile; productRef = CB45A2000000000000000005 /* Persistence */; };
+		CB45A1000000000000000006 /* Observability in Frameworks */ = {isa = PBXBuildFile; productRef = CB45A2000000000000000006 /* Observability */; };
+		CB45A1000000000000000007 /* AuthFeature in Frameworks */ = {isa = PBXBuildFile; productRef = CB45A2000000000000000007 /* AuthFeature */; };
+		CB45A1000000000000000008 /* OnboardingFeature in Frameworks */ = {isa = PBXBuildFile; productRef = CB45A2000000000000000008 /* OnboardingFeature */; };
+		CB45A1000000000000000009 /* AccountsFeature in Frameworks */ = {isa = PBXBuildFile; productRef = CB45A2000000000000000009 /* AccountsFeature */; };
+		CB45A100000000000000000A /* TransferFeature in Frameworks */ = {isa = PBXBuildFile; productRef = CB45A200000000000000000A /* TransferFeature */; };
+/* End PBXBuildFile section */
+
 /* Begin PBXContainerItemProxy section */
 		CB459F7F308A521D00CD4A71 /* PBXContainerItemProxy */ = {
 			isa = PBXContainerItemProxy;
@@ -52,6 +66,17 @@
 			isa = PBXFrameworksBuildPhase;
 			buildActionMask = 2147483647;
 			files = (
+				CB45A1000000000000000000 /* Domain in Frameworks */,
+				CB45A1000000000000000001 /* DesignSystem in Frameworks */,
+				CB45A1000000000000000002 /* Navigation in Frameworks */,
+				CB45A1000000000000000003 /* Networking in Frameworks */,
+				CB45A1000000000000000004 /* WalletSecurity in Frameworks */,
+				CB45A1000000000000000005 /* Persistence in Frameworks */,
+				CB45A1000000000000000006 /* Observability in Frameworks */,
+				CB45A1000000000000000007 /* AuthFeature in Frameworks */,
+				CB45A1000000000000000008 /* OnboardingFeature in Frameworks */,
+				CB45A1000000000000000009 /* AccountsFeature in Frameworks */,
+				CB45A100000000000000000A /* TransferFeature in Frameworks */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
@@ -112,6 +137,17 @@
 			);
 			name = Wallet;
 			packageProductDependencies = (
+				CB45A2000000000000000000 /* Domain */,
+				CB45A2000000000000000001 /* DesignSystem */,
+				CB45A2000000000000000002 /* Navigation */,
+				CB45A2000000000000000003 /* Networking */,
+				CB45A2000000000000000004 /* WalletSecurity */,
+				CB45A2000000000000000005 /* Persistence */,
+				CB45A2000000000000000006 /* Observability */,
+				CB45A2000000000000000007 /* AuthFeature */,
+				CB45A2000000000000000008 /* OnboardingFeature */,
+				CB45A2000000000000000009 /* AccountsFeature */,
+				CB45A200000000000000000A /* TransferFeature */,
 			);
 			productName = Wallet;
 			productReference = CB459F6F308A521B00CD4A71 /* Wallet.app */;
@@ -195,6 +231,9 @@
 			);
 			mainGroup = CB459F66308A521B00CD4A71;
 			minimizedProjectReferenceProxies = 1;
+			packageReferences = (
+				CB45A0000000000000000001 /* XCLocalSwiftPackageReference "WalletKit" */,
+			);
 			preferredProjectObjectVersion = 77;
 			productRefGroup = CB459F70308A521B00CD4A71 /* Products */;
 			projectDirPath = "";
@@ -321,7 +360,7 @@
 				GCC_WARN_UNINITIALIZED_AUTOS = YES_AGGRESSIVE;
 				GCC_WARN_UNUSED_FUNCTION = YES;
 				GCC_WARN_UNUSED_VARIABLE = YES;
-				IPHONEOS_DEPLOYMENT_TARGET = 26.2;
+				IPHONEOS_DEPLOYMENT_TARGET = 17.0;
 				LOCALIZATION_PREFERS_STRING_CATALOGS = YES;
 				MTL_ENABLE_DEBUG_INFO = INCLUDE_SOURCE;
 				MTL_FAST_MATH = YES;
@@ -378,7 +417,7 @@
 				GCC_WARN_UNINITIALIZED_AUTOS = YES_AGGRESSIVE;
 				GCC_WARN_UNUSED_FUNCTION = YES;
 				GCC_WARN_UNUSED_VARIABLE = YES;
-				IPHONEOS_DEPLOYMENT_TARGET = 26.2;
+				IPHONEOS_DEPLOYMENT_TARGET = 17.0;
 				LOCALIZATION_PREFERS_STRING_CATALOGS = YES;
 				MTL_ENABLE_DEBUG_INFO = NO;
 				MTL_FAST_MATH = YES;
@@ -410,11 +449,9 @@
 				PRODUCT_BUNDLE_IDENTIFIER = jw.Wallet;
 				PRODUCT_NAME = "$(TARGET_NAME)";
 				STRING_CATALOG_GENERATE_SYMBOLS = YES;
-				SWIFT_APPROACHABLE_CONCURRENCY = YES;
-				SWIFT_DEFAULT_ACTOR_ISOLATION = MainActor;
 				SWIFT_EMIT_LOC_STRINGS = YES;
 				SWIFT_UPCOMING_FEATURE_MEMBER_IMPORT_VISIBILITY = YES;
-				SWIFT_VERSION = 5.0;
+				SWIFT_VERSION = 6.0;
 				TARGETED_DEVICE_FAMILY = "1,2";
 			};
 			name = Debug;
@@ -441,11 +478,9 @@
 				PRODUCT_BUNDLE_IDENTIFIER = jw.Wallet;
 				PRODUCT_NAME = "$(TARGET_NAME)";
 				STRING_CATALOG_GENERATE_SYMBOLS = YES;
-				SWIFT_APPROACHABLE_CONCURRENCY = YES;
-				SWIFT_DEFAULT_ACTOR_ISOLATION = MainActor;
 				SWIFT_EMIT_LOC_STRINGS = YES;
 				SWIFT_UPCOMING_FEATURE_MEMBER_IMPORT_VISIBILITY = YES;
-				SWIFT_VERSION = 5.0;
+				SWIFT_VERSION = 6.0;
 				TARGETED_DEVICE_FAMILY = "1,2";
 			};
 			name = Release;
@@ -457,15 +492,14 @@
 				CODE_SIGN_STYLE = Automatic;
 				CURRENT_PROJECT_VERSION = 1;
 				GENERATE_INFOPLIST_FILE = YES;
-				IPHONEOS_DEPLOYMENT_TARGET = 26.2;
+				IPHONEOS_DEPLOYMENT_TARGET = 17.0;
 				MARKETING_VERSION = 1.0;
 				PRODUCT_BUNDLE_IDENTIFIER = jw.WalletTests;
 				PRODUCT_NAME = "$(TARGET_NAME)";
 				STRING_CATALOG_GENERATE_SYMBOLS = NO;
-				SWIFT_APPROACHABLE_CONCURRENCY = YES;
 				SWIFT_EMIT_LOC_STRINGS = NO;
 				SWIFT_UPCOMING_FEATURE_MEMBER_IMPORT_VISIBILITY = YES;
-				SWIFT_VERSION = 5.0;
+				SWIFT_VERSION = 6.0;
 				TARGETED_DEVICE_FAMILY = "1,2";
 				TEST_HOST = "$(BUILT_PRODUCTS_DIR)/Wallet.app/$(BUNDLE_EXECUTABLE_FOLDER_PATH)/Wallet";
 			};
@@ -478,15 +512,14 @@
 				CODE_SIGN_STYLE = Automatic;
 				CURRENT_PROJECT_VERSION = 1;
 				GENERATE_INFOPLIST_FILE = YES;
-				IPHONEOS_DEPLOYMENT_TARGET = 26.2;
+				IPHONEOS_DEPLOYMENT_TARGET = 17.0;
 				MARKETING_VERSION = 1.0;
 				PRODUCT_BUNDLE_IDENTIFIER = jw.WalletTests;
 				PRODUCT_NAME = "$(TARGET_NAME)";
 				STRING_CATALOG_GENERATE_SYMBOLS = NO;
-				SWIFT_APPROACHABLE_CONCURRENCY = YES;
 				SWIFT_EMIT_LOC_STRINGS = NO;
 				SWIFT_UPCOMING_FEATURE_MEMBER_IMPORT_VISIBILITY = YES;
-				SWIFT_VERSION = 5.0;
+				SWIFT_VERSION = 6.0;
 				TARGETED_DEVICE_FAMILY = "1,2";
 				TEST_HOST = "$(BUILT_PRODUCTS_DIR)/Wallet.app/$(BUNDLE_EXECUTABLE_FOLDER_PATH)/Wallet";
 			};
@@ -502,10 +535,9 @@
 				PRODUCT_BUNDLE_IDENTIFIER = jw.WalletUITests;
 				PRODUCT_NAME = "$(TARGET_NAME)";
 				STRING_CATALOG_GENERATE_SYMBOLS = NO;
-				SWIFT_APPROACHABLE_CONCURRENCY = YES;
 				SWIFT_EMIT_LOC_STRINGS = NO;
 				SWIFT_UPCOMING_FEATURE_MEMBER_IMPORT_VISIBILITY = YES;
-				SWIFT_VERSION = 5.0;
+				SWIFT_VERSION = 6.0;
 				TARGETED_DEVICE_FAMILY = "1,2";
 				TEST_TARGET_NAME = Wallet;
 			};
@@ -521,10 +553,9 @@
 				PRODUCT_BUNDLE_IDENTIFIER = jw.WalletUITests;
 				PRODUCT_NAME = "$(TARGET_NAME)";
 				STRING_CATALOG_GENERATE_SYMBOLS = NO;
-				SWIFT_APPROACHABLE_CONCURRENCY = YES;
 				SWIFT_EMIT_LOC_STRINGS = NO;
 				SWIFT_UPCOMING_FEATURE_MEMBER_IMPORT_VISIBILITY = YES;
-				SWIFT_VERSION = 5.0;
+				SWIFT_VERSION = 6.0;
 				TARGETED_DEVICE_FAMILY = "1,2";
 				TEST_TARGET_NAME = Wallet;
 			};
@@ -570,6 +601,60 @@
 			defaultConfigurationName = Release;
 		};
 /* End XCConfigurationList section */
+
+/* Begin XCLocalSwiftPackageReference section */
+		CB45A0000000000000000001 /* XCLocalSwiftPackageReference "WalletKit" */ = {
+			isa = XCLocalSwiftPackageReference;
+			relativePath = WalletKit;
+		};
+/* End XCLocalSwiftPackageReference section */
+
+/* Begin XCSwiftPackageProductDependency section */
+		CB45A2000000000000000000 /* Domain */ = {
+			isa = XCSwiftPackageProductDependency;
+			productName = Domain;
+		};
+		CB45A2000000000000000001 /* DesignSystem */ = {
+			isa = XCSwiftPackageProductDependency;
+			productName = DesignSystem;
+		};
+		CB45A2000000000000000002 /* Navigation */ = {
+			isa = XCSwiftPackageProductDependency;
+			productName = Navigation;
+		};
+		CB45A2000000000000000003 /* Networking */ = {
+			isa = XCSwiftPackageProductDependency;
+			productName = Networking;
+		};
+		CB45A2000000000000000004 /* WalletSecurity */ = {
+			isa = XCSwiftPackageProductDependency;
+			productName = WalletSecurity;
+		};
+		CB45A2000000000000000005 /* Persistence */ = {
+			isa = XCSwiftPackageProductDependency;
+			productName = Persistence;
+		};
+		CB45A2000000000000000006 /* Observability */ = {
+			isa = XCSwiftPackageProductDependency;
+			productName = Observability;
+		};
+		CB45A2000000000000000007 /* AuthFeature */ = {
+			isa = XCSwiftPackageProductDependency;
+			productName = AuthFeature;
+		};
+		CB45A2000000000000000008 /* OnboardingFeature */ = {
+			isa = XCSwiftPackageProductDependency;
+			productName = OnboardingFeature;
+		};
+		CB45A2000000000000000009 /* AccountsFeature */ = {
+			isa = XCSwiftPackageProductDependency;
+			productName = AccountsFeature;
+		};
+		CB45A200000000000000000A /* TransferFeature */ = {
+			isa = XCSwiftPackageProductDependency;
+			productName = TransferFeature;
+		};
+/* End XCSwiftPackageProductDependency section */
 	};
 	rootObject = CB459F67308A521B00CD4A71 /* Project object */;
 }
