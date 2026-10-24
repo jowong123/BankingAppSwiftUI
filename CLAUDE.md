@@ -22,7 +22,7 @@ The full spec is in `docs/SPEC.md`. Read the relevant section before starting an
 Wallet/              app target: WalletApp, AppCoordinator, AppEnvironment
 WalletKit/           local SPM package — all modules + tests
   Sources/<Module>/  AuthFeature, OnboardingFeature, AccountsFeature, TransferFeature,
-                     Domain, DesignSystem, Navigation, Networking, Security,
+                     Domain, DesignSystem, Navigation, Networking, WalletSecurity,
                      Persistence, Observability, IdentitySDK
   Tests/<Module>Tests/
 backend/             Vapor service + openapi.yaml
@@ -32,7 +32,7 @@ docs/                SPEC.md, adr/, threat-model.md
 ## Hard rules
 
 - Never use `Double`/`Float` for money. Use `Money` (Decimal) from Domain; `amountMinor: Int64` at the API boundary.
-- Never store secrets in UserDefaults, SwiftData, files or source. Use `Security/KeychainStore`.
+- Never store secrets in UserDefaults, SwiftData, files or source. Use `WalletSecurity/KeychainStore`.
 - Never log PII. Use `Logger` from Observability; interpolations default to `privacy: .private`. `print` is banned.
 - No singletons, no service locators. Inject through initialisers.
 - No `!` force unwraps or `try!` outside tests.
@@ -44,9 +44,10 @@ docs/                SPEC.md, adr/, threat-model.md
 ## Rules (enforced by Package.swift)
 
 - **Features never import other features.** Cross-feature navigation = output closures handled by `AppCoordinator`.
+- Features never import `Networking`, `Persistence` or `WalletSecurity`. They use protocols in `Domain`; `AppEnvironment` injects the implementations (ADR-004).
 - `Domain` imports Foundation only. No SwiftUI, no networking.
 - `DesignSystem` imports SwiftUI + Domain only.
-- `Networking`, `Security`, `Persistence` import Domain + Observability only.
+- `Networking`, `WalletSecurity`, `Persistence` import Domain + Observability only.
 - `IdentitySDK` imports Apple frameworks only — nothing from WalletKit. It must build alone.
 - If a task seems to need a forbidden import, stop and propose where the shared code should live.
 

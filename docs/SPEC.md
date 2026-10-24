@@ -52,7 +52,7 @@ flowchart TD
         DesignSystem
         Navigation
         Networking
-        Security
+        WalletSecurity
         Persistence
         Observability
     end
@@ -75,7 +75,7 @@ WalletKit/
   Package.swift
   Sources/
     AuthFeature/  OnboardingFeature/  AccountsFeature/  TransferFeature/
-    Domain/  DesignSystem/  Navigation/  Networking/  Security/
+    Domain/  DesignSystem/  Navigation/  Networking/  WalletSecurity/
     Persistence/  Observability/  IdentitySDK/
   Tests/                     one test target per module
 backend/                     Vapor service + openapi.yaml
@@ -89,15 +89,17 @@ fastlane/
 
 | Module | May import | Must not import |
 | --- | --- | --- |
-| Any Feature | Core modules it needs | Any other Feature |
+| Any Feature | Domain, DesignSystem, Navigation, Observability | Any other Feature; Networking, Persistence, WalletSecurity (use Domain protocols, ADR-004) |
 | OnboardingFeature | Core + IdentitySDK | Other Features |
 | Domain | Foundation only | Everything else |
-| DesignSystem | SwiftUI + Domain | Features, Networking, Security |
-| Networking, Security, Persistence | Domain, Observability | Features, DesignSystem |
+| DesignSystem | SwiftUI + Domain | Features, Networking, WalletSecurity |
+| Networking, WalletSecurity, Persistence | Domain, Observability | Features, DesignSystem |
 | Observability | Foundation, OSLog, Sentry | Everything in WalletKit |
 | IdentitySDK | Apple frameworks only (CoreNFC, CryptoKit) | Anything in WalletKit |
 
 Enforced by `Package.swift` target dependencies, so a forbidden import fails to compile.
+
+`WalletSecurity` is named that way, not `Security`, because a module called `Security` shadows Apple's Security.framework (Keychain, `SecKey`) and breaks the build.
 
 ## 4. Architecture
 
@@ -248,7 +250,7 @@ Small Vapor service in `backend/`, Fluent SQLite, seeded fake accounts, simulate
 | Domain | Swift Testing | Money rounding, FX, every state transition | 90%+ |
 | View models | Swift Testing | State per action, error mapping, cancellation | 80%+ |
 | Networking | Swift Testing + `URLProtocol` stub | Interceptors, retry, idempotency reuse, 401 refresh | 80%+ |
-| Security | Swift Testing | Canonical payload, sign/verify round trip (software key), Keychain | 80%+ |
+| WalletSecurity | Swift Testing | Canonical payload, sign/verify round trip (software key), Keychain | 80%+ |
 | Backend | XCTVapor | Signature verification, nonce reuse, idempotency, quote expiry | 80%+ |
 | UI flows | XCUITest | Login → balance; send → confirm → success; quote expired; network failure mid-transfer | Key flows |
 
