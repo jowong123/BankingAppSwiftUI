@@ -69,7 +69,7 @@ Use the `/new-feature` skill to scaffold one.
 2. Write or update tests in the same change. Money, state machine and security code need tests for edge cases.
 3. Run the relevant build, tests and lint before saying you're done. Report what you ran and the result.
 4. If a decision isn't covered by `docs/SPEC.md`, stop and ask, or propose an ADR with `/adr`. Don't guess.
-5. Keep changes to one concern. Suggest a conventional commit message (`feat(transfer): ...`) at the end.
+5. Keep changes to one concern. Suggest a conventional commit message (`feat(transfer): ...`) at the end. Work for a build phase puts the phase number in front, e.g. `phase 2: feat(domain): add Money, Currency, FX types and transfer state machine with tests`.
 6. Explain non-obvious code briefly in your summary — the owner must be able to defend every line in an interview.
 
 ## Skills and agents in this repo

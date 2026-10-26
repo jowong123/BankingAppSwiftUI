@@ -21,6 +21,6 @@ The phase number is: $ARGUMENTS
    - commands you ran and their results
    - ADRs added or needed
    - 3–5 things the owner should be able to explain in an interview about this phase
-   - suggested commit message(s)
+   - suggested commit message(s), prefixed with the phase: `phase $ARGUMENTS: feat(scope): ...`
 
 Never mark a check as verified unless you ran something that proves it.
