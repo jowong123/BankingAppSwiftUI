@@ -39,9 +39,13 @@ let targets: [Target] = [
     .target(name: Module.observability),
     .target(name: Module.designSystem, dependencies: [.target(name: Module.domain)]),
     .target(name: Module.navigation, dependencies: [.target(name: Module.domain)]),
+    // Only Networking may depend on NetworkingKit (ADR-012).
     .target(
         name: Module.networking,
-        dependencies: [.target(name: Module.domain), .target(name: Module.observability)]
+        dependencies: [
+            .target(name: Module.domain), .target(name: Module.observability),
+            .product(name: "NetworkingKit", package: "NetworkingKit"),
+        ]
     ),
     .target(
         name: Module.security,
@@ -71,6 +75,18 @@ let package = Package(
     // macOS is declared only so `swift test` runs on the host and in CI.
     platforms: [.iOS(.v17), .macOS(.v14)],
     products: modules.map { .library(name: $0, targets: [$0]) },
+    // Standalone generic HTTP package next to WalletKit (ADR-012).
+    dependencies: [.package(path: "../NetworkingKit")],
     targets: targets
-        + modules.map { .testTarget(name: "\($0)Tests", dependencies: [.target(name: $0)]) }
+        + modules.map { .testTarget(name: "\($0)Tests", dependencies: testDependencies($0)) }
 )
+
+/// Each test target sees its own module. NetworkingTests also sees NetworkingKit so it
+/// can stub the transport under `WalletAPI`.
+func testDependencies(_ module: String) -> [Target.Dependency] {
+    var dependencies: [Target.Dependency] = [.target(name: module)]
+    if module == Module.networking {
+        dependencies.append(.product(name: "NetworkingKit", package: "NetworkingKit"))
+    }
+    return dependencies
+}
