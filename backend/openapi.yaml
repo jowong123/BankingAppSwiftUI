@@ -1,0 +1,401 @@
+openapi: 3.1.0
+info:
+  title: Wallet Sandbox API
+  version: 0.3.0
+  description: |
+    Sandbox API for the Wallet iOS portfolio app. Fake money only. Source of truth for the
+    app's `Networking` DTOs (SPEC section 7).
+
+    Conventions
+    - Money is `{ "amountMinor": <int64>, "currency": "<ISO 4217>" }`. Never a float.
+    - FX rates are decimal strings, e.g. `"0.74560095"`.
+    - Dates are ISO 8601 UTC.
+    - Every non-2xx response has the `Error` body. Every response carries `X-Request-ID`
+      and `Cache-Control: no-store`.
+    - `POST /v1/transfers` requires `Idempotency-Key`, equal to the transfer `id`;
+      `POST /v1/quotes` honours it if sent. The same key with the same body returns the
+      original response with `Idempotent-Replayed: true`; with a different body, 422
+      `idempotency_mismatch`; while the first request is still running, 409
+      `idempotency_in_progress`. Records expire after 24 h; an unfinished claim can be taken
+      over after 60 s. A failed request (error or 5xx) does not keep the key.
+    - Only these error codes mean "rejected, nothing changed": `bad_request`,
+      `invalid_request`, `not_found`, `declined`, `quote_expired`, `quote_used`,
+      `insufficient_funds`, `idempotency_key_required`, `idempotency_mismatch`. After any
+      other failure of `POST /v1/transfers`, the client polls `GET /v1/transfers/{id}`.
+    - Sandbox fault injection, only when the server runs with `SIMULATION_HEADERS=on`:
+      `X-Sim-Delay: <ms>` (0...30000) and `X-Sim-Fail: network | server | declined`.
+      `network` processes the request and then drops the connection, so the client sees a
+      timeout for work that happened.
+
+    Device binding (`/v1/devices`) and transaction signing
+    (`/v1/transfers/{id}/challenge`, `/confirm`) are added in Phase 7.
+servers:
+  - url: http://127.0.0.1:8080
+    description: Local sandbox (`swift run WalletBackend serve`)
+
+security:
+  - bearer: []
+
+paths:
+  /v1/auth/login:
+    post:
+      summary: Sandbox login
+      security: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/LoginRequest" }
+      responses:
+        "200":
+          description: Session tokens
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/SessionTokens" }
+        "401": { $ref: "#/components/responses/Error" }
+        "400": { $ref: "#/components/responses/Error" }
+
+  /v1/auth/refresh:
+    post:
+      summary: Exchange a refresh token for new tokens
+      description: |
+        Refresh tokens rotate and work once. Presenting a used refresh token revokes every
+        token for that user (reuse detection), so they must sign in again. Exception: within
+        30 s of rotation, while the new pair has never been refreshed, the old token is
+        treated as a retry of a lost response. The unused pair is revoked and a new pair
+        issued. Clients must not retry this call automatically.
+      security: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/RefreshRequest" }
+      responses:
+        "200":
+          description: New session tokens
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/SessionTokens" }
+        "401": { $ref: "#/components/responses/Error" }
+
+  /v1/accounts:
+    get:
+      summary: Balances per currency
+      responses:
+        "200":
+          description: The signed-in user's accounts
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [accounts]
+                properties:
+                  accounts:
+                    type: array
+                    items: { $ref: "#/components/schemas/Account" }
+        "401": { $ref: "#/components/responses/Error" }
+
+  /v1/accounts/{accountId}/transactions:
+    get:
+      summary: Transaction history, newest first
+      parameters:
+        - name: accountId
+          in: path
+          required: true
+          schema: { type: string }
+        - name: limit
+          in: query
+          schema: { type: integer, minimum: 1, maximum: 100, default: 20 }
+        - name: cursor
+          in: query
+          description: Opaque `nextCursor` from the previous page.
+          schema: { type: string }
+      responses:
+        "200":
+          description: One page
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/TransactionPage" }
+        "400": { $ref: "#/components/responses/Error" }
+        "401": { $ref: "#/components/responses/Error" }
+        "404": { $ref: "#/components/responses/Error" }
+
+  /v1/recipients:
+    get:
+      summary: Saved payees
+      responses:
+        "200":
+          description: The signed-in user's recipients
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [recipients]
+                properties:
+                  recipients:
+                    type: array
+                    items: { $ref: "#/components/schemas/Recipient" }
+        "401": { $ref: "#/components/responses/Error" }
+
+  /v1/quotes:
+    post:
+      summary: FX quote, valid 30 seconds
+      description: |
+        The fee is in the source currency and is deducted before conversion:
+        `targetAmount = round_half_even((sourceAmount - fee) * rate)`.
+        Fee: 0.5% of the source amount rounded up, minimum 1.00 (or 1 for 0-decimal currencies).
+      parameters:
+        - $ref: "#/components/parameters/OptionalIdempotencyKey"
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/QuoteRequest" }
+      responses:
+        "201":
+          description: Quote
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/Quote" }
+        "400": { $ref: "#/components/responses/Error" }
+        "401": { $ref: "#/components/responses/Error" }
+        "422": { $ref: "#/components/responses/Error" }
+
+  /v1/transfers:
+    post:
+      summary: Create a transfer from a quote
+      description: |
+        `id` is generated by the client and must equal the `Idempotency-Key`, so the app can
+        retry after a restart without creating a second transfer. If a transfer with this `id`
+        and the same details already exists, it is returned with 200 before any validation,
+        so a late retry never gets `quote_expired`. The same `id` with different details is
+        409 `transfer_exists`. An `id` that belongs to another user is 404 `not_found`, so
+        the reply never confirms that it exists. The transfer starts as
+        `awaiting_confirmation`; the signed confirm arrives in Phase 7. Balances don't
+        change yet.
+      parameters:
+        - $ref: "#/components/parameters/IdempotencyKey"
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/TransferRequest" }
+      responses:
+        "200":
+          description: This transfer already existed (retry after the idempotency record expired)
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/Transfer" }
+        "201":
+          description: Transfer
+          headers:
+            Idempotent-Replayed:
+              description: "`true` when this is the stored response of an earlier request."
+              schema: { type: string }
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/Transfer" }
+        "400": { $ref: "#/components/responses/Error" }
+        "401": { $ref: "#/components/responses/Error" }
+        "404": { $ref: "#/components/responses/Error" }
+        "409": { $ref: "#/components/responses/Error" }
+        "422": { $ref: "#/components/responses/Error" }
+
+  /v1/transfers/{transferId}:
+    get:
+      summary: Transfer status
+      parameters:
+        - name: transferId
+          in: path
+          required: true
+          schema: { type: string, format: uuid }
+      responses:
+        "200":
+          description: Transfer
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/Transfer" }
+        "401": { $ref: "#/components/responses/Error" }
+        "404": { $ref: "#/components/responses/Error" }
+
+components:
+  securitySchemes:
+    bearer:
+      type: http
+      scheme: bearer
+      description: Opaque access token from login or refresh. Valid 15 minutes.
+
+  parameters:
+    IdempotencyKey:
+      name: Idempotency-Key
+      in: header
+      required: true
+      schema: { type: string, minLength: 1, maxLength: 255 }
+    OptionalIdempotencyKey:
+      name: Idempotency-Key
+      in: header
+      required: false
+      schema: { type: string, minLength: 1, maxLength: 255 }
+
+  responses:
+    Error:
+      description: Error envelope
+      content:
+        application/json:
+          schema: { $ref: "#/components/schemas/Error" }
+
+  schemas:
+    Money:
+      type: object
+      required: [amountMinor, currency]
+      properties:
+        amountMinor:
+          type: integer
+          format: int64
+          description: Amount in the currency's minor units (SGD cents, JPY yen, KWD fils).
+        currency:
+          type: string
+          enum: [SGD, USD, EUR, JPY, KWD]
+
+    Error:
+      type: object
+      required: [code, message, requestId]
+      properties:
+        code:
+          type: string
+          description: Stable machine-readable code.
+          enum:
+            - bad_request
+            - method_not_allowed
+            - payload_too_large
+            - unsupported_media_type
+            - unauthorized
+            - invalid_credentials
+            - invalid_refresh_token
+            - not_found
+            - invalid_request
+            - idempotency_key_required
+            - idempotency_mismatch
+            - idempotency_in_progress
+            - quote_expired
+            - quote_used
+            - transfer_exists
+            - insufficient_funds
+            - declined
+            - sim_server_error
+            - internal
+        message: { type: string, description: Human-readable; may change. }
+        requestId: { type: string }
+
+    LoginRequest:
+      type: object
+      required: [email, password]
+      properties:
+        email: { type: string, format: email }
+        password: { type: string, format: password }
+
+    RefreshRequest:
+      type: object
+      required: [refreshToken]
+      properties:
+        refreshToken: { type: string }
+
+    SessionTokens:
+      type: object
+      required: [accessToken, refreshToken, expiresIn]
+      properties:
+        accessToken: { type: string }
+        refreshToken: { type: string }
+        expiresIn: { type: integer, description: Access-token lifetime in seconds. }
+
+    Account:
+      type: object
+      required: [id, currency, balance, updatedAt]
+      properties:
+        id: { type: string }
+        currency: { type: string }
+        balance: { $ref: "#/components/schemas/Money" }
+        updatedAt: { type: string, format: date-time }
+
+    Transaction:
+      type: object
+      required: [id, accountId, amount, description, createdAt]
+      properties:
+        id: { type: string }
+        accountId: { type: string }
+        amount:
+          $ref: "#/components/schemas/Money"
+          description: Signed; negative for money out.
+        description: { type: string }
+        createdAt: { type: string, format: date-time }
+
+    TransactionPage:
+      type: object
+      required: [items]
+      properties:
+        items:
+          type: array
+          items: { $ref: "#/components/schemas/Transaction" }
+        nextCursor:
+          type: [string, "null"]
+          description: Absent or null on the last page.
+
+    Recipient:
+      type: object
+      required: [id, name, currency, accountLast4]
+      properties:
+        id: { type: string }
+        name: { type: string }
+        currency: { type: string }
+        accountLast4: { type: string, minLength: 4, maxLength: 4 }
+
+    QuoteRequest:
+      type: object
+      required: [sourceAmount, targetCurrency]
+      properties:
+        sourceAmount: { $ref: "#/components/schemas/Money" }
+        targetCurrency: { type: string }
+
+    Quote:
+      type: object
+      required: [id, sourceAmount, targetAmount, fee, rate, expiresAt]
+      properties:
+        id: { type: string }
+        sourceAmount: { $ref: "#/components/schemas/Money" }
+        targetAmount: { $ref: "#/components/schemas/Money" }
+        fee:
+          $ref: "#/components/schemas/Money"
+          description: In the source currency.
+        rate:
+          type: string
+          pattern: "^[0-9]+(\\.[0-9]+)?$"
+          description: Units of target per unit of source.
+        expiresAt: { type: string, format: date-time }
+
+    TransferRequest:
+      type: object
+      required: [id, quoteId, recipientId, sourceAccountId]
+      properties:
+        id: { type: string, format: uuid, description: Client-generated; also the Idempotency-Key. }
+        quoteId: { type: string }
+        recipientId: { type: string }
+        sourceAccountId: { type: string }
+
+    Transfer:
+      type: object
+      required:
+        [id, quoteId, recipientId, sourceAccountId, sourceAmount, targetAmount, fee, status, createdAt, updatedAt]
+      properties:
+        id: { type: string, format: uuid }
+        quoteId: { type: string }
+        recipientId: { type: string }
+        sourceAccountId: { type: string }
+        sourceAmount: { $ref: "#/components/schemas/Money" }
+        targetAmount: { $ref: "#/components/schemas/Money" }
+        fee: { $ref: "#/components/schemas/Money" }
+        status:
+          type: string
+          enum: [awaiting_confirmation, processing, completed, failed]
+        failureReason: { type: [string, "null"] }
+        createdAt: { type: string, format: date-time }
+        updatedAt: { type: string, format: date-time }
