@@ -7,9 +7,14 @@ included:
   - WalletUITests
   - WalletKit/Sources
   - WalletKit/Tests
+  - NetworkingKit/Sources
+  - NetworkingKit/Tests
+  - backend/Sources
+  - backend/Tests
 
 excluded:
   - WalletKit/.build
+  - NetworkingKit/.build
   - backend/.build
 
 # Rules swift-format already owns.

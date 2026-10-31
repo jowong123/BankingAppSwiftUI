@@ -11,8 +11,11 @@ root="$(cd "$(dirname "$0")/.." && pwd)"
 work="$(mktemp -d)"
 trap 'rm -rf "$work"' EXIT
 
-cp -R "$root/WalletKit/Package.swift" "$root/WalletKit/Sources" "$root/WalletKit/Tests" "$work/"
-cd "$work"
+# WalletKit depends on ../NetworkingKit, so copy both side by side.
+mkdir -p "$work/WalletKit" "$work/NetworkingKit"
+cp -R "$root/WalletKit/Package.swift" "$root/WalletKit/Sources" "$root/WalletKit/Tests" "$work/WalletKit/"
+cp -R "$root/NetworkingKit/Package.swift" "$root/NetworkingKit/Sources" "$root/NetworkingKit/Tests" "$work/NetworkingKit/"
+cd "$work/WalletKit"
 
 build() { swift build --explicit-target-dependency-import-check error >/dev/null 2>&1; }
 
@@ -31,6 +34,10 @@ for from in "${features[@]}"; do
     for to in Networking Persistence WalletSecurity; do
         pairs+=("$from:$to")
     done
+done
+# Only Networking may use the generic HTTP package (ADR-012).
+for from in "${features[@]}" Domain DesignSystem Navigation WalletSecurity Persistence Observability IdentitySDK; do
+    pairs+=("$from:NetworkingKit")
 done
 # Core and SDK rules.
 pairs+=(
@@ -59,6 +66,14 @@ else
     exit 1
 fi
 rm Sources/OnboardingFeature/BoundaryProbe.swift
+printf 'import NetworkingKit\n' >Sources/Networking/BoundaryProbe.swift
+if build; then
+    echo "ok    Networking can import NetworkingKit (control)"
+else
+    echo "FAIL  control import did not compile" >&2
+    exit 1
+fi
+rm Sources/Networking/BoundaryProbe.swift
 
 for pair in "${pairs[@]}"; do
     from="${pair%%:*}"
@@ -73,6 +88,22 @@ for pair in "${pairs[@]}"; do
     fi
     rm "$probe"
 done
+
+# Only Networking (and its tests) may import NetworkingKit, and that includes the app
+# target (ADR-012). The app links WalletKit, which makes NetworkingKit importable there,
+# so check by grep. The pattern also catches Swift 6 access-level imports
+# (`public import`), attributes (`@_exported`) and single-symbol imports (`import struct`).
+import_pattern='^[[:space:]]*(@[A-Za-z_]+[[:space:]]+)*((public|package|internal|fileprivate|private)[[:space:]]+)?import[[:space:]]+((typealias|struct|class|enum|protocol|let|var|func|actor)[[:space:]]+)?NetworkingKit\b'
+outside="$(grep -rlnE --include='*.swift' "$import_pattern" \
+    "$root/Wallet" "$root/WalletTests" "$root/WalletUITests" "$root/WalletKit/Sources" "$root/WalletKit/Tests" \
+    2>/dev/null | grep -v -e "^$root/WalletKit/Sources/Networking/" -e "^$root/WalletKit/Tests/NetworkingTests/" || true)"
+if [[ -n "$outside" ]]; then
+    echo "FAIL  NetworkingKit imported outside Networking:"
+    echo "$outside"
+    failures=$((failures + 1))
+else
+    echo "ok    nothing outside Networking imports NetworkingKit"
+fi
 
 if ((failures > 0)); then
     echo "$failures forbidden import(s) compiled." >&2
