@@ -59,9 +59,13 @@ flowchart TD
     subgraph SDK["SDK (standalone)"]
         IdentitySDK
     end
+    subgraph Pkg["NetworkingKit package (standalone, ADR-012)"]
+        NetworkingKit
+    end
     App --> Features
     Features --> Core
     Onb --> IdentitySDK
+    Networking --> NetworkingKit
 ```
 
 ### Folder layout
@@ -78,6 +82,7 @@ WalletKit/
     Domain/  DesignSystem/  Navigation/  Networking/  WalletSecurity/
     Persistence/  Observability/  IdentitySDK/
   Tests/                     one test target per module
+NetworkingKit/               standalone package: generic HTTP client + interceptors (ADR-012)
 backend/                     Vapor service + openapi.yaml
 docs/
   SPEC.md  adr/  threat-model.md
@@ -93,11 +98,13 @@ fastlane/
 | OnboardingFeature | Core + IdentitySDK | Other Features |
 | Domain | Foundation only | Everything else |
 | DesignSystem | SwiftUI + Domain | Features, Networking, WalletSecurity |
-| Networking, WalletSecurity, Persistence | Domain, Observability | Features, DesignSystem |
+| Networking | Domain, Observability, NetworkingKit | Features, DesignSystem |
+| WalletSecurity, Persistence | Domain, Observability | Features, DesignSystem, NetworkingKit |
+| NetworkingKit (separate package) | Foundation only | Anything in WalletKit |
 | Observability | Foundation, OSLog, Sentry | Everything in WalletKit |
 | IdentitySDK | Apple frameworks only (CoreNFC, CryptoKit) | Anything in WalletKit |
 
-Enforced by `Package.swift` target dependencies, so a forbidden import fails to compile.
+Enforced by `Package.swift` target dependencies, so a forbidden import fails to compile. Only `Networking` depends on `NetworkingKit`; it holds the Wallet endpoints and DTOs, and NetworkingKit holds the generic HTTP machinery (ADR-012).
 
 `WalletSecurity` is named that way, not `Security`, because a module called `Security` shadows Apple's Security.framework (Keychain, `SecKey`) and breaks the build.
 
@@ -136,7 +143,7 @@ Enforced by `Package.swift` target dependencies, so a forbidden import fails to 
 **Core types**
 - `Currency`: ISO 4217 code + `minorUnits` (SGD 2, JPY 0, KWD 3).
 - `Money`: `amount: Decimal` + `currency`. Arithmetic only between equal currencies (throws otherwise). Banker's rounding to minor units. Converts to/from `amountMinor: Int64`. Provides `formatted(locale:)` and `accessibilityLabel`.
-- `FXQuote`: `id`, `sourceAmount`, `targetAmount`, `rate`, `fee`, `expiresAt`.
+- `FXQuote`: `id`, `sourceAmount`, `targetAmount`, `rate`, `fee`, `expiresAt`. The fee is in the source currency and is deducted before conversion: `targetAmount = round((sourceAmount − fee) × rate)`. The user is debited exactly `sourceAmount`.
 - `Transfer`: `id` (client UUID, also the idempotency key), `quote`, `recipient`, `state`, `createdAt`, `updatedAt`.
 
 **Transfer state machine**
@@ -241,7 +248,7 @@ Small Vapor service in `backend/`, Fluent SQLite, seeded fake accounts, simulate
 - Money: `{ "amountMinor": 125000, "currency": "SGD" }`. Never floats.
 - Errors: `{ "code": "quote_expired", "message": "...", "requestId": "..." }`.
 - Same `Idempotency-Key` returns the original response.
-- Simulation headers: `X-Sim-Delay: <ms>`, `X-Sim-Fail: network|server|declined`.
+- Simulation headers: `X-Sim-Delay: <ms>`, `X-Sim-Fail: network|server|declined`. Off unless the server runs with `SIMULATION_HEADERS=on`.
 
 ## 8. Testing, CI/CD, observability
 
@@ -249,7 +256,8 @@ Small Vapor service in `backend/`, Fluent SQLite, seeded fake accounts, simulate
 | --- | --- | --- | --- |
 | Domain | Swift Testing | Money rounding, FX, every state transition | 90%+ |
 | View models | Swift Testing | State per action, error mapping, cancellation | 80%+ |
-| Networking | Swift Testing + `URLProtocol` stub | Interceptors, retry, idempotency reuse, 401 refresh | 80%+ |
+| NetworkingKit | Swift Testing + `URLProtocol` stub | Interceptors, retry, idempotency reuse, 401 refresh, redirects refused | 80%+ |
+| Networking | Swift Testing | Endpoints, DTO ↔ Domain mapping, error and outcome classification, refresh failure mapping | 80%+ |
 | WalletSecurity | Swift Testing | Canonical payload, sign/verify round trip (software key), Keychain | 80%+ |
 | Backend | XCTVapor | Signature verification, nonce reuse, idempotency, quote expiry | 80%+ |
 | UI flows | XCUITest | Login → balance; send → confirm → success; quote expired; network failure mid-transfer | Key flows |
@@ -279,10 +287,11 @@ Template: `docs/adr/000-template.md`.
 | 009 | SwiftData with `.complete` file protection | GRDB + SQLCipher |
 | 010 | Money as `Decimal`, minor units at API boundary | `Double`, integer-only in app |
 | 011 | Transfer state machine with persisted outbox | Ad-hoc flags |
-| 012 | Custom `URLSession` client with interceptors | Alamofire |
+| 012 | Custom `URLSession` client with interceptors, in standalone `NetworkingKit` | Alamofire; target inside WalletKit |
 | 013 | Plain Xcode + local SPM; Tuist at team scale | Tuist from day one |
 | 014 | Swift 6 strict concurrency everywhere | Swift 5 mode in some modules |
 | 015 | OSLog + Sentry with scrubbing | Firebase Crashlytics |
+| 016 | Sandbox backend: SQLKit rows, hashed rotating tokens with grace window, two-layer idempotency | Fluent models with `@unchecked Sendable`; JWT; middleware-only idempotency |
 
 ## 10. Build plan (10 weeks)
 
@@ -297,12 +306,13 @@ Run each phase with `/phase <n>`. Review every diff before committing.
 - Done when: rounding tests cover JPY (0), SGD (2), KWD (3); every state transition pair tested; components preview in dark mode and largest Dynamic Type.
 
 ### Phase 3 (week 3): Backend + networking
-- Task: Vapor backend per section 7 with seed data and simulation headers. `Networking`: `APIClient`, interceptor chain (auth, idempotency, retry with backoff, request ID), DTOs.
+- Task: Vapor backend per section 7 with seed data and simulation headers (device binding and signing endpoints come in Phase 7). `NetworkingKit`: `HTTPClient`, interceptor chain (auth, idempotency, retry with backoff, request ID). `Networking`: Wallet endpoints and DTOs.
 - Done when: backend tests pass; a retried POST reuses the same idempotency key.
 
 ### Phase 4 (week 4): Accounts + offline cache
 - Task: AccountsFeature (balances per currency, paginated history, pull to refresh). Persistence with SwiftData and `.complete` protection; offline balances with "last updated".
 - Done when: airplane mode still shows cached balances; VoiceOver reads amounts with currency.
+- Carried over from the Phase 3 review: `WalletAPI` returns public DTOs for accounts, transactions, recipients and transfers. Map them to Domain types inside `Networking` and make the DTOs internal. Add a contract test that the backend's currencies and minor units match `Currency.supported`.
 
 ### Phase 5 (week 5): Auth + session
 - Task: AuthFeature and `KeychainStore`: sandbox login, Face ID with PIN fallback, token refresh, inactivity auto-lock, background blur.
@@ -311,10 +321,12 @@ Run each phase with `/phase <n>`. Review every diff before committing.
 ### Phase 6 (week 6): Transfer flow + outbox
 - Task: TransferFeature: recipient → amount → live quote with fee breakdown and 30 s countdown → review → confirm → result. `TransferOutbox` actor resuming on launch.
 - Done when: double-tap Send creates one transfer; expiry re-quotes visibly; killing the app mid-transfer resumes on relaunch.
+- Carried over from the Phase 3 review: `APIError.isDefiniteRejection` judges one request, not the transfer. The outbox needs its own rule after an unknown outcome. A 404 when polling `GET /v1/transfers/{id}` can mean the create is still in flight, so resend the create with the same ID (safe, it is idempotent on the ID). `idempotency_mismatch` or `transfer_exists` on create means a transfer with this ID exists, so fetch it. Neither is "failed".
 
 ### Phase 7 (week 7): Secure Enclave signing + App Attest
 - Task: Device binding and transaction signing per section 6 on iOS and backend. Public-key pinning with backup pin.
 - Done when: backend rejects tampered amount, reused nonce, expired nonce; changing Face ID enrolment forces re-binding.
+- Carried over from the Phase 3 review: the client checks that a quote matches what was asked, but trusts the server's maths (`target = round((source − fee) × rate)`, fee below source, expiry in the future). Decide whether the signed quote covers this or the client re-checks it. A pinning failure must not be reported as a user cancel: `URLSessionTransport` currently maps every `URLError.cancelled` to `CancellationError`.
 
 ### Phase 8 (week 8): IdentitySDK
 - Task: Standalone package: MRZ input, BAC/PACE, read DG1 + DG2, passive authentication. Async public API, typed errors, DocC tutorial, sample app. Wire into OnboardingFeature.

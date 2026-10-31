@@ -25,6 +25,7 @@ WalletKit/           local SPM package — all modules + tests
                      Domain, DesignSystem, Navigation, Networking, WalletSecurity,
                      Persistence, Observability, IdentitySDK
   Tests/<Module>Tests/
+NetworkingKit/       standalone package: generic HTTP client + interceptors (ADR-012)
 backend/             Vapor service + openapi.yaml
 docs/                SPEC.md, adr/, threat-model.md
 ```
@@ -47,7 +48,8 @@ docs/                SPEC.md, adr/, threat-model.md
 - Features never import `Networking`, `Persistence` or `WalletSecurity`. They use protocols in `Domain`; `AppEnvironment` injects the implementations (ADR-004).
 - `Domain` imports Foundation only. No SwiftUI, no networking.
 - `DesignSystem` imports SwiftUI + Domain only.
-- `Networking`, `WalletSecurity`, `Persistence` import Domain + Observability only.
+- `Networking`, `WalletSecurity`, `Persistence` import Domain + Observability only. `Networking` also imports `NetworkingKit`; nothing else does.
+- `NetworkingKit` imports Foundation only — nothing from WalletKit. Wallet-specific endpoints and DTOs live in `Networking` (ADR-012).
 - `IdentitySDK` imports Apple frameworks only — nothing from WalletKit. It must build alone.
 - If a task seems to need a forbidden import, stop and propose where the shared code should live.
 
