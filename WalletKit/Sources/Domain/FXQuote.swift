@@ -9,8 +9,10 @@ public struct FXQuote: Hashable, Sendable, Identifiable {
     public let fee: Money
     public let expiresAt: Date
 
-    /// Throws if the amounts don't match the rate's currencies. The fee's currency isn't
-    /// checked yet: the spec doesn't say which side it's charged in (decide in Phase 3).
+    /// Throws if the amounts don't match the rate's currencies, or the fee isn't in the
+    /// source currency. The fee is deducted before conversion (SPEC section 5):
+    /// `targetAmount = round((sourceAmount - fee) * rate)`, so the user is debited exactly
+    /// `sourceAmount`. The server computes the amounts; this only checks the currencies.
     public init(
         id: String,
         sourceAmount: Money,
@@ -24,6 +26,9 @@ public struct FXQuote: Hashable, Sendable, Identifiable {
         }
         guard targetAmount.currency == rate.target else {
             throw .currencyMismatch(expected: rate.target, actual: targetAmount.currency)
+        }
+        guard fee.currency == rate.source else {
+            throw .currencyMismatch(expected: rate.source, actual: fee.currency)
         }
         self.id = id
         self.sourceAmount = sourceAmount

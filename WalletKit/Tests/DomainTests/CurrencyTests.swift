@@ -37,4 +37,15 @@ import Testing
         #expect(try Currency(code: "SGD", minorUnits: 3) != .sgd)
         #expect(try Currency(code: "SGD", minorUnits: 2) == .sgd)
     }
+
+    @Test func supportedLookupFindsKnownCodes() {
+        #expect(Currency.supported(code: "JPY") == .jpy)
+        #expect(Currency.supported(code: "KWD") == .kwd)
+        #expect(Currency.supported(code: "SGD") == .sgd)
+    }
+
+    @Test(arguments: ["CHF", "sgd", "", "SGDX"])
+    func supportedLookupRejectsUnknownCodes(code: String) {
+        #expect(Currency.supported(code: code) == nil)
+    }
 }

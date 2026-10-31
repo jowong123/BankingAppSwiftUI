@@ -30,4 +30,13 @@ public struct Currency: Hashable, Sendable {
     public static let eur = Currency(knownCode: "EUR", minorUnits: 2)
     public static let jpy = Currency(knownCode: "JPY", minorUnits: 0)
     public static let kwd = Currency(knownCode: "KWD", minorUnits: 3)
+
+    /// Currencies the app knows the ISO 4217 minor units for. The API sends only the code
+    /// (`{ "amountMinor", "currency" }`), so decoding money needs this table.
+    public static let supported: [Currency] = [.sgd, .usd, .eur, .jpy, .kwd]
+
+    /// The supported currency with this code, or `nil` if the app doesn't know it.
+    public static func supported(code: String) -> Currency? {
+        supported.first { $0.code == code }
+    }
 }

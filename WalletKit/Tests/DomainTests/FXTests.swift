@@ -52,14 +52,14 @@ import Testing
 @Suite struct FXQuoteTests {
     let expiry = Date(timeIntervalSince1970: 1_800_000_000)
 
-    func makeQuote(source: Money? = nil, target: Money? = nil) throws -> FXQuote {
+    func makeQuote(source: Money? = nil, target: Money? = nil, fee: Money? = nil) throws -> FXQuote {
         let rate = try FXRate(source: .sgd, target: .jpy, rate: decimal("110"))
         return try FXQuote(
             id: "q_1",
             sourceAmount: source ?? Money(amountMinor: 10_000, currency: .sgd),
             targetAmount: target ?? Money(amountMinor: 11_000, currency: .jpy),
             rate: rate,
-            fee: Money(amountMinor: 150, currency: .sgd),
+            fee: fee ?? Money(amountMinor: 150, currency: .sgd),
             expiresAt: expiry
         )
     }
@@ -80,6 +80,14 @@ import Testing
     @Test func rejectsTargetAmountInWrongCurrency() {
         #expect(throws: MoneyError.currencyMismatch(expected: .jpy, actual: .kwd)) {
             try makeQuote(target: Money(amountMinor: 100, currency: .kwd))
+        }
+    }
+
+    @Test func rejectsFeeOutsideSourceCurrency() {
+        // The fee is deducted from the source amount before conversion, so it must be in
+        // the source currency. A target-currency fee would be a different pricing model.
+        #expect(throws: MoneyError.currencyMismatch(expected: .sgd, actual: .jpy)) {
+            try makeQuote(fee: Money(amountMinor: 150, currency: .jpy))
         }
     }
 }
