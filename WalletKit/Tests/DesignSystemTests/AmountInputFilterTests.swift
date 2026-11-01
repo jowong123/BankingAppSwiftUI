@@ -76,7 +76,9 @@ import Testing
     @Test func maxInputStillFitsInt64MinorUnits() throws {
         let filter = AmountInputFilter(currency: .kwd, locale: enUS)
         let money = try #require(filter.money(from: filter.sanitize(String(repeating: "9", count: 20) + ".999")))
-        #expect(throws: Never.self) { try money.amountMinor() }
+        #expect(throws: Never.self) {
+            try money.amountMinor()
+        }
     }
 
     @Test func emptyMeansNoAmountNotZero() {

@@ -34,7 +34,10 @@ public struct AmountField: View {
                     .foregroundStyle(Palette.textPrimary)
                     .amountKeyboard(allowsDecimals: currency.minorUnits > 0)
                     .accessibilityLabel(label)
-                    .accessibilityValue(amount.map { $0.accessibilityLabel(locale: locale) } ?? "")
+                    .accessibilityValue(
+                        amount.map {
+                            $0.accessibilityLabel(locale: locale)
+                        } ?? "")
 
                 Text(currency.code)
                     .font(Typography.headline)
@@ -48,17 +51,23 @@ public struct AmountField: View {
         .padding(Spacing.large)
         .background(RoundedRectangle(cornerRadius: Radius.card).fill(Palette.surface))
         // Prefill in onAppear, not init, so it uses the environment locale like editing does.
-        .onAppear { text = filter.text(for: amount) }
+        .onAppear {
+            text = filter.text(for: amount)
+        }
         .onChange(of: text) { _, newText in
             let clean = filter.sanitize(newText)
             // Rewriting `text` re-enters onChange once, then `clean == newText` stops it.
-            if clean != newText { text = clean }
+            if clean != newText {
+                text = clean
+            }
             amount = filter.money(from: clean)
         }
         // The parent can also set the amount (a reset, or a re-quoted "recipient gets").
         // Only rewrite the text when it disagrees, so "12," isn't replaced with "12" mid-typing.
         .onChange(of: amount) { _, newAmount in
-            if filter.money(from: text) != newAmount { text = filter.text(for: newAmount) }
+            if filter.money(from: text) != newAmount {
+                text = filter.text(for: newAmount)
+            }
         }
         .onChange(of: currency) {
             text = filter.sanitize(text)

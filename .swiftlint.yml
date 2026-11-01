@@ -38,6 +38,13 @@ force_try: error
 force_unwrapping: error
 
 custom_rules:
+  brace_body_on_own_lines:
+    name: "One-line brace body"
+    # `{ content }` on one line. Empty `{}` and empty closures (`{ _ in }`, `{ [weak self] in }`) are allowed.
+    regex: '\{(?!\s*(?:\[[^\]\n]*\]\s*)?(?:[\w,\s]+\s+)?in\s*\})[^\n{}]*\S[^\n{}]*\}'
+    excluded_match_kinds: [comment, comment.mark, comment.url, doccomment, doccomment.field, string]
+    message: "Put the body of { } on its own lines: `{` ends the line, the content goes below, `}` on its own line."
+    severity: error
   no_print:
     name: "print is banned"
     regex: '(^|[^\w.])(print|debugPrint|dump)\('

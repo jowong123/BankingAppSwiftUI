@@ -20,13 +20,21 @@ actor FakeSession {
         refreshCount += 1
         // Give concurrent 401s time to pile up behind this refresh.
         try await Task.sleep(for: .milliseconds(50))
-        if let refreshError { throw refreshError }
+        if let refreshError {
+            throw refreshError
+        }
         token = refreshedToken
         return refreshedToken
     }
 
     var interceptor: AuthInterceptor {
-        AuthInterceptor(accessToken: { await self.token }, refresh: { try await self.refresh() })
+        AuthInterceptor(
+            accessToken: {
+                await self.token
+            },
+            refresh: {
+                try await self.refresh()
+            })
     }
 }
 
@@ -107,9 +115,13 @@ func acceptsOnly(_ token: String) -> StubTransport {
 
         let codes = try await withThrowingTaskGroup(of: Int.self) { group in
             for _ in 0..<8 {
-                group.addTask { try await client.execute(request).statusCode }
+                group.addTask {
+                    try await client.execute(request).statusCode
+                }
             }
-            return try await group.reduce(into: []) { $0.append($1) }
+            return try await group.reduce(into: []) {
+                $0.append($1)
+            }
         }
 
         #expect(codes == Array(repeating: 200, count: 8))

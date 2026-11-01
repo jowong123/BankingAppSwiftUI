@@ -27,7 +27,9 @@ public struct WalletAPI: Sendable {
 
     static func authInterceptor(tokens: any SessionTokenProvider) -> AuthInterceptor {
         AuthInterceptor(
-            accessToken: { await tokens.accessToken() },
+            accessToken: {
+                await tokens.accessToken()
+            },
             refresh: {
                 do {
                     return try await tokens.refreshAccessToken()

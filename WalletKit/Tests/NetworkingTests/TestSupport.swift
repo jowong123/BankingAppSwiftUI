@@ -31,10 +31,14 @@ struct FakeTokens: SessionTokenProvider {
     /// Thrown by `refreshAccessToken` when `refreshed` is nil.
     var refreshError: any Error = SessionRefreshError.noSession
 
-    func accessToken() async -> String? { token }
+    func accessToken() async -> String? {
+        token
+    }
 
     func refreshAccessToken() async throws -> String {
-        guard let refreshed else { throw refreshError }
+        guard let refreshed else {
+            throw refreshError
+        }
         return refreshed
     }
 }
@@ -43,7 +47,11 @@ struct FakeTokens: SessionTokenProvider {
 /// refresh error mapping) but no backoff sleep.
 func makeAPI(_ transport: StubTransport, tokens: FakeTokens = FakeTokens()) throws -> WalletAPI {
     let auth = WalletAPI.authInterceptor(tokens: tokens)
-    let retry = RetryInterceptor(sleep: { _ in }, unitRandom: { 0 })
+    let retry = RetryInterceptor(
+        sleep: { _ in },
+        unitRandom: {
+            0
+        })
     let client = HTTPClient(
         baseURL: try #require(URL(string: "https://api.example.test")),
         transport: transport,

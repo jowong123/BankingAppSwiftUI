@@ -26,9 +26,13 @@ struct IdempotencyMiddleware: AsyncMiddleware {
     let clock: BackendClock
 
     func respond(to request: Request, chainingTo next: any AsyncResponder) async throws -> Response {
-        guard request.method == .POST else { return try await next.respond(to: request) }
+        guard request.method == .POST else {
+            return try await next.respond(to: request)
+        }
         guard let key = request.headers.first(name: Self.header) else {
-            if required { throw APIFailure.idempotencyKeyRequired }
+            if required {
+                throw APIFailure.idempotencyKeyRequired
+            }
             return try await next.respond(to: request)
         }
         guard (1...255).contains(key.count) else {
@@ -75,7 +79,11 @@ struct IdempotencyMiddleware: AsyncMiddleware {
             scopedKey: "\(user.id):\(key)",
             method: request.method.rawValue,
             path: request.url.path,
-            bodyHash: SHA256.hash(data: body.map { Data(buffer: $0) } ?? Data()).hex,
+            bodyHash: SHA256.hash(
+                data: body.map {
+                    Data(buffer: $0)
+                } ?? Data()
+            ).hex,
             lockOwner: UUID().uuidString,
             completed: 0,
             status: 0,
@@ -103,7 +111,9 @@ struct IdempotencyMiddleware: AsyncMiddleware {
         guard stored.method == claim.method, stored.path == claim.path, stored.bodyHash == claim.bodyHash else {
             throw APIFailure.idempotencyMismatch
         }
-        guard stored.completed == 1 else { throw APIFailure.idempotencyInProgress }
+        guard stored.completed == 1 else {
+            throw APIFailure.idempotencyInProgress
+        }
         var headers = HTTPHeaders()
         headers.contentType = .json
         headers.add(name: Self.replayedHeader, value: "true")

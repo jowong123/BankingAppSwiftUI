@@ -18,7 +18,9 @@ struct AuthController: Sendable {
         // hashing can't starve other requests.
         let passwordMatches = try await request.password.async
             .verify(body.password, created: user?.passwordHash ?? dummyHash).get()
-        guard let user, passwordMatches else { throw APIFailure.invalidCredentials }
+        guard let user, passwordMatches else {
+            throw APIFailure.invalidCredentials
+        }
         return try await issueTokens(userID: user.id, sql: request.sql)
     }
 
@@ -53,14 +55,18 @@ struct AuthController: Sendable {
                     .where("kind", .equal, "refresh")
                     .where("revoked", .equal, 1)
                     .first(decoding: TokenRow.self)
-            else { return nil }
+            else {
+                return nil
+            }
             if let retried = try await retryWithinGrace(used, now: now, sql: sql) {
                 return retried
             }
             try await sql.update("tokens").set("revoked", to: 1).where("userId", .equal, used.userId).run()
             return nil
         }
-        guard let tokens else { throw APIFailure.invalidRefreshToken }
+        guard let tokens else {
+            throw APIFailure.invalidRefreshToken
+        }
         return tokens
     }
 
@@ -81,7 +87,9 @@ struct AuthController: Sendable {
     private func retryWithinGrace(_ used: TokenRow, now: Int64, sql: any SQLDatabase) async throws -> SessionTokens? {
         guard let rotatedAt = used.rotatedAt, now - rotatedAt <= Tokens.refreshGraceMillis,
             let replacement = used.replacedBy
-        else { return nil }
+        else {
+            return nil
+        }
         guard
             let unused = try await sql.update("tokens")
                 .set("revoked", to: 1)
@@ -89,7 +97,9 @@ struct AuthController: Sendable {
                 .where("revoked", .equal, 0)
                 .returning("*")
                 .first(decoding: TokenRow.self)
-        else { return nil }
+        else {
+            return nil
+        }
         try await sql.update("tokens").set("revoked", to: 1).where("pairId", .equal, unused.pairId).run()
         return try await rotate(used, sql: sql)
     }

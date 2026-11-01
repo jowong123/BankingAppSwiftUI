@@ -112,7 +112,9 @@ import Testing
     @Test func backoffIsCappedAtMaxDelay() {
         let policy = RetryPolicy(maxAttempts: 10, baseDelay: .milliseconds(500), maxDelay: .seconds(2))
 
-        let delays = (1...5).map { policy.delay(beforeRetry: $0, unitRandom: 1) }
+        let delays = (1...5).map {
+            policy.delay(beforeRetry: $0, unitRandom: 1)
+        }
 
         #expect(delays == [.milliseconds(500), .seconds(1), .seconds(2), .seconds(2), .seconds(2)])
     }
@@ -132,13 +134,19 @@ import Testing
                 signal.yield()
                 try await Task.sleep(for: .seconds(60))
             },
-            unitRandom: { 1 }
+            unitRandom: {
+                1
+            }
         )
         let client = try makeClient(transport, interceptors: [retry])
         let request = get
 
-        let task = Task { try await client.execute(request) }
-        for await _ in sleeping { break }
+        let task = Task {
+            try await client.execute(request)
+        }
+        for await _ in sleeping {
+            break
+        }
         task.cancel()
 
         await #expect(throws: CancellationError.self) {

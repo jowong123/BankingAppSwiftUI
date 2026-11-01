@@ -9,7 +9,11 @@ import Foundation
 public struct IdempotencyInterceptor: Interceptor {
     private let makeKey: @Sendable () -> String
 
-    public init(makeKey: @escaping @Sendable () -> String = { UUID().uuidString }) {
+    public init(
+        makeKey: @escaping @Sendable () -> String = {
+            UUID().uuidString
+        }
+    ) {
         self.makeKey = makeKey
     }
 

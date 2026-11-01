@@ -123,8 +123,14 @@ struct LoggingInterceptor: Interceptor {
         #expect(response.statusCode == 201)
         let requests = await transport.requests
         #expect(requests.count == 3)
-        let keys = Set(requests.map { $0.value(forHTTPHeaderField: HTTPHeader.idempotencyKey) })
-        let requestIDs = Set(requests.map { $0.value(forHTTPHeaderField: HTTPHeader.requestID) })
+        let keys = Set(
+            requests.map {
+                $0.value(forHTTPHeaderField: HTTPHeader.idempotencyKey)
+            })
+        let requestIDs = Set(
+            requests.map {
+                $0.value(forHTTPHeaderField: HTTPHeader.requestID)
+            })
         #expect(keys.count == 1)
         #expect(keys.first.flatMap(\.self) != nil)
         #expect(requestIDs.count == 1)
@@ -176,7 +182,13 @@ struct LoggingInterceptor: Interceptor {
     @Test(arguments: [HTTPMethod.post, .put, .patch, .delete])
     func everyMutatingMethodGetsAKey(method: HTTPMethod) async throws {
         let transport = StubTransport([status(200)])
-        let client = try makeClient(transport, interceptors: [IdempotencyInterceptor(makeKey: { "key_1" })])
+        let client = try makeClient(
+            transport,
+            interceptors: [
+                IdempotencyInterceptor(makeKey: {
+                    "key_1"
+                })
+            ])
 
         _ = try await client.execute(HTTPRequest(method: method, path: "/v1/things"))
 
@@ -187,7 +199,14 @@ struct LoggingInterceptor: Interceptor {
         let transport = StubTransport([status(200)])
         let client = try makeClient(
             transport,
-            interceptors: [RequestIDInterceptor(makeID: { "new" }), IdempotencyInterceptor(makeKey: { "new" })]
+            interceptors: [
+                RequestIDInterceptor(makeID: {
+                    "new"
+                }),
+                IdempotencyInterceptor(makeKey: {
+                    "new"
+                }),
+            ]
         )
         let request = HTTPRequest(
             method: .post,

@@ -44,7 +44,9 @@ public enum APIError: Error, Hashable, Sendable {
     /// "in progress". Deliberately the complement of `isDefiniteRejection`, so a new error
     /// shape defaults to "check status", never to "failed". For a transfer this means
     /// poll `transfer(id:)`; it is never shown as failed (CLAUDE.md, SPEC section 5).
-    public var isOutcomeUnknown: Bool { !isDefiniteRejection }
+    public var isOutcomeUnknown: Bool {
+        !isDefiniteRejection
+    }
 }
 
 extension APIError {

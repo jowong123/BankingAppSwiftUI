@@ -16,7 +16,9 @@ import Testing
 
     @Test func ignoresDigitsOnceComplete() {
         var entry = PINEntry(length: 4)
-        for digit in [1, 2, 3, 4, 5, 6] { entry.append(digit) }
+        for digit in [1, 2, 3, 4, 5, 6] {
+            entry.append(digit)
+        }
         #expect(entry.value == "1234")
     }
 
@@ -29,7 +31,9 @@ import Testing
 
     @Test func keepsLeadingZeros() {
         var entry = PINEntry(length: 4)
-        for digit in [0, 0, 7, 0] { entry.append(digit) }
+        for digit in [0, 0, 7, 0] {
+            entry.append(digit)
+        }
         #expect(entry.value == "0070")
     }
 
@@ -45,7 +49,9 @@ import Testing
 
     @Test func resetClearsEverything() {
         var entry = PINEntry(length: 4)
-        for digit in [1, 2, 3, 4] { entry.append(digit) }
+        for digit in [1, 2, 3, 4] {
+            entry.append(digit)
+        }
         entry.reset()
         #expect(entry.digits.isEmpty)
         #expect(!entry.isComplete)

@@ -5,7 +5,9 @@ import Foundation
 enum Currencies {
     static let minorUnits: [String: Int] = ["SGD": 2, "USD": 2, "EUR": 2, "JPY": 0, "KWD": 3]
 
-    static func isSupported(_ code: String) -> Bool { minorUnits[code] != nil }
+    static func isSupported(_ code: String) -> Bool {
+        minorUnits[code] != nil
+    }
 }
 
 /// Simulated FX: units of each currency per 1 USD. The live table jitters each quote
@@ -21,11 +23,15 @@ struct RateTable: Sendable {
         "KWD": Decimal(string: "0.3071") ?? 1,
     ]
 
-    static let fixed = RateTable { base[$0] }
+    static let fixed = RateTable {
+        base[$0]
+    }
 
     /// ±0.2% random wobble per quote.
     static let live = RateTable { code in
-        guard let rate = base[code] else { return nil }
+        guard let rate = base[code] else {
+            return nil
+        }
         let wobble = Decimal(Int.random(in: -20...20)) / 10_000
         return rate * (1 + wobble)
     }
@@ -60,7 +66,9 @@ enum MoneyMath {
     ) -> Int64? {
         guard let sourceUnits = Currencies.minorUnits[sourceCurrency],
             let targetUnits = Currencies.minorUnits[targetCurrency]
-        else { return nil }
+        else {
+            return nil
+        }
         let sourceMajor = Decimal(netSourceMinor) / power(sourceUnits)
         let targetMinor = round(sourceMajor * rate * power(targetUnits), scale: 0)
         // Rounded to scale 0, so the description is plain digits; nil if it overflows Int64.

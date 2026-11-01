@@ -7,12 +7,18 @@ import Foundation
 public struct RequestIDInterceptor: Interceptor {
     private let makeID: @Sendable () -> String
 
-    public init(makeID: @escaping @Sendable () -> String = { UUID().uuidString }) {
+    public init(
+        makeID: @escaping @Sendable () -> String = {
+            UUID().uuidString
+        }
+    ) {
         self.makeID = makeID
     }
 
     public func intercept(_ request: HTTPRequest, next: HTTPNext) async throws -> HTTPResponse {
-        guard request.header(HTTPHeader.requestID) == nil else { return try await next(request) }
+        guard request.header(HTTPHeader.requestID) == nil else {
+            return try await next(request)
+        }
         var request = request
         request.setHeader(HTTPHeader.requestID, makeID())
         return try await next(request)

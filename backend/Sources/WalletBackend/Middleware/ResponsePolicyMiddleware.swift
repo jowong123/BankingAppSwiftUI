@@ -15,7 +15,10 @@ struct NoStoreMiddleware: AsyncMiddleware {
 struct AccessLogMiddleware: AsyncMiddleware {
     func respond(to request: Request, chainingTo next: any AsyncResponder) async throws -> Response {
         let response = try await next.respond(to: request)
-        let pattern = request.route.map { "/" + $0.path.map(\.description).joined(separator: "/") } ?? "unmatched"
+        let pattern =
+            request.route.map {
+                "/" + $0.path.map(\.description).joined(separator: "/")
+            } ?? "unmatched"
         request.logger.info("\(request.method.rawValue) \(pattern) \(response.status.code)")
         return response
     }

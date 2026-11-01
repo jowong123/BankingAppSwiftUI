@@ -11,7 +11,10 @@ final class AccountsTests: XCTestCase {
 
             let accounts = try response.content.decode(AccountsResponse.self).accounts
             XCTAssertEqual(accounts.map(\.id), ["acc_jpy", "acc_kwd", "acc_sgd", "acc_usd"])
-            let kwd = try XCTUnwrap(accounts.first { $0.currency == "KWD" })
+            let kwd = try XCTUnwrap(
+                accounts.first {
+                    $0.currency == "KWD"
+                })
             XCTAssertEqual(kwd.balance, MoneyDTO(amountMinor: 120_500, currency: "KWD"))
         }
     }
@@ -55,7 +58,10 @@ final class AccountsTests: XCTestCase {
             XCTAssertEqual(seen.count, 45)
             XCTAssertEqual(Set(seen.map(\.id)).count, 45)
             XCTAssertEqual(seen.map(\.createdAt), seen.map(\.createdAt).sorted(by: >))
-            XCTAssertTrue(seen.allSatisfy { $0.accountId == "acc_sgd" })
+            XCTAssertTrue(
+                seen.allSatisfy {
+                    $0.accountId == "acc_sgd"
+                })
         }
     }
 
@@ -110,8 +116,14 @@ final class AccountsTests: XCTestCase {
 
             let recipients = try response.content.decode(RecipientsResponse.self).recipients
             XCTAssertEqual(recipients.count, 4)
-            XCTAssertFalse(recipients.contains { $0.id == "rcp_other_usd" })
-            XCTAssertTrue(recipients.allSatisfy { $0.accountLast4.count == 4 })
+            XCTAssertFalse(
+                recipients.contains {
+                    $0.id == "rcp_other_usd"
+                })
+            XCTAssertTrue(
+                recipients.allSatisfy {
+                    $0.accountLast4.count == 4
+                })
         }
     }
 }

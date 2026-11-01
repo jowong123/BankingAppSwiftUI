@@ -18,8 +18,13 @@ struct RequestIDMiddleware: AsyncMiddleware {
 
     static func validated(_ id: String) -> String? {
         let allowed = CharacterSet.alphanumerics.union(CharacterSet(charactersIn: "-_"))
-        guard (1...128).contains(id.count), id.unicodeScalars.allSatisfy({ $0.isASCII && allowed.contains($0) })
-        else { return nil }
+        guard (1...128).contains(id.count),
+            id.unicodeScalars.allSatisfy({
+                $0.isASCII && allowed.contains($0)
+            })
+        else {
+            return nil
+        }
         return id
     }
 }
@@ -30,5 +35,7 @@ private struct RequestIDKey: StorageKey {
 
 extension Request {
     /// Set by `RequestIDMiddleware`, which runs first.
-    var requestID: String { storage[RequestIDKey.self] ?? "unknown" }
+    var requestID: String {
+        storage[RequestIDKey.self] ?? "unknown"
+    }
 }

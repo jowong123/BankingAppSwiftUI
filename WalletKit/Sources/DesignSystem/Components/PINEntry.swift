@@ -10,12 +10,18 @@ struct PINEntry: Equatable, Sendable {
         self.length = max(1, length)
     }
 
-    var isComplete: Bool { digits.count == length }
-    var value: String { digits.map(String.init).joined() }
+    var isComplete: Bool {
+        digits.count == length
+    }
+    var value: String {
+        digits.map(String.init).joined()
+    }
 
     /// Ignores input once complete or if `digit` isn't 0...9.
     mutating func append(_ digit: Int) {
-        guard !isComplete, (0...9).contains(digit) else { return }
+        guard !isComplete, (0...9).contains(digit) else {
+            return
+        }
         digits.append(digit)
     }
 

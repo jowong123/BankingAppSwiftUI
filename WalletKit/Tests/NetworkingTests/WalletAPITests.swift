@@ -33,7 +33,9 @@ let transferJSON = """
 
     @Test(arguments: ["../admin", "a/b", "", "acc 1", "acc%2F1", "acc?x=1", String(repeating: "a", count: 129)])
     func idsThatCouldChangeThePathAreRejected(id: String) {
-        #expect(throws: APIError.invalidRequest) { try WalletEndpoints.pathID(id) }
+        #expect(throws: APIError.invalidRequest) {
+            try WalletEndpoints.pathID(id)
+        }
     }
 
     @Test(arguments: ["acc_sgd", "6f1c2e1a-0000-4000-8000-000000000001", "Q1"])
@@ -124,13 +126,17 @@ let transferJSON = """
     @Test func errorWithoutEnvelopeKeepsTheStatus() async throws {
         let api = try makeAPI(StubTransport([status(404, "Not Found")]))
 
-        await #expect(throws: APIError.http(status: 404)) { try await api.recipients() }
+        await #expect(throws: APIError.http(status: 404)) {
+            try await api.recipients()
+        }
     }
 
     @Test func unauthorizedAfterFailedRefresh() async throws {
         let api = try makeAPI(StubTransport([status(401)]), tokens: FakeTokens(token: "old", refreshed: nil))
 
-        await #expect(throws: APIError.unauthorized) { try await api.accounts() }
+        await #expect(throws: APIError.unauthorized) {
+            try await api.accounts()
+        }
     }
 
     /// Only the session store saying "no session", or the server refusing the token, may

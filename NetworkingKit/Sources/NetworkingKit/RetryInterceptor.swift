@@ -41,8 +41,12 @@ public struct RetryInterceptor: Interceptor {
 
     public init(
         policy: RetryPolicy = RetryPolicy(),
-        sleep: @escaping @Sendable (Duration) async throws -> Void = { try await Task.sleep(for: $0) },
-        unitRandom: @escaping @Sendable () -> Double = { Double.random(in: 0..<1) }
+        sleep: @escaping @Sendable (Duration) async throws -> Void = {
+            try await Task.sleep(for: $0)
+        },
+        unitRandom: @escaping @Sendable () -> Double = {
+            Double.random(in: 0..<1)
+        }
     ) {
         self.policy = policy
         self.sleep = sleep

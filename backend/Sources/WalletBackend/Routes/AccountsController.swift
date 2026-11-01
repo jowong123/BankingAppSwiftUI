@@ -30,7 +30,9 @@ struct AccountsController: Sendable {
             .where("id", .equal, accountID)
             .where("userId", .equal, user.id)
             .first()
-        guard account != nil else { throw APIFailure.notFound }
+        guard account != nil else {
+            throw APIFailure.notFound
+        }
 
         var query = try request.sql.select().column("*").from("transactions")
             .where("accountId", .equal, accountID)
@@ -40,7 +42,11 @@ struct AccountsController: Sendable {
         let rows = try await query.orderBy("seq", .descending).limit(limit + 1).all(decoding: TransactionRow.self)
 
         let page = Array(rows.prefix(limit))
-        let nextCursor = rows.count > limit ? page.last.map { Self.encodeCursor($0.seq) } : nil
+        let nextCursor =
+            rows.count > limit
+            ? page.last.map {
+                Self.encodeCursor($0.seq)
+            } : nil
         return TransactionPage(items: page.map(TransactionDTO.init), nextCursor: nextCursor)
     }
 

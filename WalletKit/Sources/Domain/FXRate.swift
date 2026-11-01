@@ -8,7 +8,9 @@ public struct FXRate: Hashable, Sendable {
     public let rate: Decimal
 
     public init(source: Currency, target: Currency, rate: Decimal) throws(MoneyError) {
-        guard rate > 0 else { throw .invalidRate }
+        guard rate > 0 else {
+            throw .invalidRate
+        }
         self.source = source
         self.target = target
         self.rate = rate

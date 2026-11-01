@@ -28,10 +28,14 @@ public struct URLSessionTransport: HTTPTransport {
         } catch let error as URLError {
             // URLSession reports task cancellation as URLError.cancelled. Surface it as
             // CancellationError so callers handle it like any other cancelled work.
-            if error.code == .cancelled { throw CancellationError() }
+            if error.code == .cancelled {
+                throw CancellationError()
+            }
             throw HTTPError.transport(error.code)
         }
-        guard let http = response as? HTTPURLResponse else { throw HTTPError.invalidResponse }
+        guard let http = response as? HTTPURLResponse else {
+            throw HTTPError.invalidResponse
+        }
         var headers: [String: String] = [:]
         for case (let name as String, let value as String) in http.allHeaderFields {
             headers[name] = value

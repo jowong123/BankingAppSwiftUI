@@ -35,7 +35,9 @@ struct AmountInputFilter: Sendable {
             if let digit = character.wholeNumberValue, (0...9).contains(digit), character.isNumber {
                 sawDigit = true
                 if hasSeparator {
-                    if fraction.count < currency.minorUnits { fraction += String(digit) }
+                    if fraction.count < currency.minorUnits {
+                        fraction += String(digit)
+                    }
                 } else if integer.count < maxIntegerDigits {
                     integer += String(digit)
                 }
@@ -46,15 +48,22 @@ struct AmountInputFilter: Sendable {
             }
         }
 
-        integer = String(integer.drop { $0 == "0" })
-        if integer.isEmpty, hasSeparator || sawDigit { integer = "0" }
+        integer = String(
+            integer.drop {
+                $0 == "0"
+            })
+        if integer.isEmpty, hasSeparator || sawDigit {
+            integer = "0"
+        }
         // Currencies with no minor units (JPY) never show a separator.
         return hasSeparator && currency.minorUnits > 0 ? integer + decimalSeparator + fraction : integer
     }
 
     /// Parses a sanitized string. Empty input means "no amount yet", not zero.
     func money(from text: String) -> Money? {
-        guard !text.isEmpty else { return nil }
+        guard !text.isEmpty else {
+            return nil
+        }
         let normalized = text.replacingOccurrences(of: decimalSeparator, with: ".")
         guard let amount = Decimal(string: normalized, locale: Locale(identifier: "en_US_POSIX")) else {
             return nil
@@ -66,7 +75,9 @@ struct AmountInputFilter: Sendable {
     /// Negative amounts can't be typed, so they show as empty rather than as text
     /// that the next keystroke would silently strip.
     func text(for money: Money?) -> String {
-        guard let money, !money.isNegative else { return "" }
+        guard let money, !money.isNegative else {
+            return ""
+        }
         return money.amount.description.replacingOccurrences(of: ".", with: decimalSeparator)
     }
 }

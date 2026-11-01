@@ -65,6 +65,10 @@ Each feature has:
 
 Use the `/new-feature` skill to scaffold one.
 
+## Code style
+
+- Every `{ }` with content puts the content on its own lines: `{` ends the line, the body goes below, `}` closes on its own line. This includes `guard`/`if`, computed properties and short closures (`.map {` / `$0.code` / `}`). A closure signature stays on the brace line (`{ item in`). Only empty bodies stay on one line: `{}`, `{ _ in }`. Enforced by the SwiftLint rule `brace_body_on_own_lines`.
+
 ## Workflow
 
 1. Restate the task and list the files you will create or change before writing code.

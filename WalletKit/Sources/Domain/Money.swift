@@ -25,17 +25,25 @@ public struct Money: Hashable, Sendable {
         Money(amount: 0, currency: currency)
     }
 
-    public var isZero: Bool { amount.isZero }
-    public var isNegative: Bool { amount < 0 }
+    public var isZero: Bool {
+        amount.isZero
+    }
+    public var isNegative: Bool {
+        amount < 0
+    }
 
     /// The integer minor-unit amount for the API (`amountMinor: Int64`).
     public func amountMinor() throws(MoneyError) -> Int64 {
         let scale = Decimal(sign: .plus, exponent: currency.minorUnits, significand: 1)
         let minor = amount * scale
-        guard minor >= Decimal(Int64.min), minor <= Decimal(Int64.max) else { throw .overflow }
+        guard minor >= Decimal(Int64.min), minor <= Decimal(Int64.max) else {
+            throw .overflow
+        }
         // `amount` is already rounded, so `minor` is a whole number and its description
         // is plain digits. NSDecimalNumber.int64Value is avoided: it loses precision near the limits.
-        guard let value = Int64(minor.description) else { throw .overflow }
+        guard let value = Int64(minor.description) else {
+            throw .overflow
+        }
         return value
     }
 
@@ -57,8 +65,12 @@ public struct Money: Hashable, Sendable {
     /// conforming to `Comparable` (whose `<` cannot report a mismatch).
     public func compare(to other: Money) throws(MoneyError) -> ComparisonResult {
         try requireSameCurrency(other)
-        if amount < other.amount { return .orderedAscending }
-        if amount > other.amount { return .orderedDescending }
+        if amount < other.amount {
+            return .orderedAscending
+        }
+        if amount > other.amount {
+            return .orderedDescending
+        }
         return .orderedSame
     }
 

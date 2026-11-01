@@ -33,7 +33,9 @@ import Testing
 
     @Test(arguments: TransferState.allCases)
     func terminalStatesAcceptNoEvents(state: TransferState) {
-        let acceptsAnything = TransferEvent.allCases.contains { (try? TransferStateMachine.next(state, $0)) != nil }
+        let acceptsAnything = TransferEvent.allCases.contains {
+            (try? TransferStateMachine.next(state, $0)) != nil
+        }
         #expect(state.isTerminal == !acceptsAnything)
         #expect(state.isTerminal == [.completed, .failed].contains(state))
     }
@@ -60,7 +62,9 @@ import Testing
         // Before the confirm request is sent, nothing has reached the server to reject.
         for state in [TransferState.draft, .quoted, .expired, .authorised] {
             for event in [TransferEvent.rejected, .declined] {
-                #expect(throws: TransferTransitionError.self) { try TransferStateMachine.next(state, event) }
+                #expect(throws: TransferTransitionError.self) {
+                    try TransferStateMachine.next(state, event)
+                }
             }
         }
     }

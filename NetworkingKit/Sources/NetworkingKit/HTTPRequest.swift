@@ -8,7 +8,9 @@ public enum HTTPMethod: String, Sendable {
     case delete = "DELETE"
 
     /// Methods that change server state. They always carry an `Idempotency-Key`.
-    public var isMutating: Bool { self != .get }
+    public var isMutating: Bool {
+        self != .get
+    }
 }
 
 /// Header names the interceptors and servers agree on.
@@ -61,11 +63,16 @@ public struct HTTPRequest: Hashable, Sendable, CustomStringConvertible, CustomDe
         let headerNames = headers.keys.sorted().map { name in
             name.caseInsensitiveCompare(HTTPHeader.authorization) == .orderedSame ? "\(name): <redacted>" : name
         }
-        let bodyText = body.map { "<\($0.count) bytes>" } ?? "none"
+        let bodyText =
+            body.map {
+                "<\($0.count) bytes>"
+            } ?? "none"
         return "\(method.rawValue) \(path) headers: [\(headerNames.joined(separator: ", "))] body: \(bodyText)"
     }
 
-    public var debugDescription: String { description }
+    public var debugDescription: String {
+        description
+    }
 
     /// `dump`, test-failure diffs and debuggers use the mirror, so it holds only the
     /// redacted description.
@@ -75,12 +82,16 @@ public struct HTTPRequest: Hashable, Sendable, CustomStringConvertible, CustomDe
 
     /// Header lookup ignoring case, as HTTP header names are case-insensitive.
     public func header(_ name: String) -> String? {
-        headers.first { $0.key.caseInsensitiveCompare(name) == .orderedSame }?.value
+        headers.first {
+            $0.key.caseInsensitiveCompare(name) == .orderedSame
+        }?.value
     }
 
     /// Sets a header, replacing any existing one with the same name in another case.
     public mutating func setHeader(_ name: String, _ value: String) {
-        headers = headers.filter { $0.key.caseInsensitiveCompare(name) != .orderedSame }
+        headers = headers.filter {
+            $0.key.caseInsensitiveCompare(name) != .orderedSame
+        }
         headers[name] = value
     }
 }
@@ -96,9 +107,13 @@ public struct HTTPResponse: Hashable, Sendable {
         self.body = body
     }
 
-    public var isSuccess: Bool { (200..<300).contains(statusCode) }
+    public var isSuccess: Bool {
+        (200..<300).contains(statusCode)
+    }
 
     public func header(_ name: String) -> String? {
-        headers.first { $0.key.caseInsensitiveCompare(name) == .orderedSame }?.value
+        headers.first {
+            $0.key.caseInsensitiveCompare(name) == .orderedSame
+        }?.value
     }
 }

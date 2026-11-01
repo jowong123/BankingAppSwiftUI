@@ -15,8 +15,15 @@ public struct Endpoint<Response: Sendable>: Sendable {
 }
 
 extension Endpoint where Response: Decodable {
-    public init(request: HTTPRequest, decoder: @escaping @Sendable () -> JSONDecoder = { JSONDecoder() }) {
-        self.init(request: request) { data in try decoder().decode(Response.self, from: data) }
+    public init(
+        request: HTTPRequest,
+        decoder: @escaping @Sendable () -> JSONDecoder = {
+            JSONDecoder()
+        }
+    ) {
+        self.init(request: request) { data in
+            try decoder().decode(Response.self, from: data)
+        }
     }
 }
 
@@ -27,6 +34,8 @@ public struct EmptyResponse: Decodable, Hashable, Sendable {
 
 extension Endpoint where Response == EmptyResponse {
     public init(request: HTTPRequest) {
-        self.init(request: request) { _ in EmptyResponse() }
+        self.init(request: request) { _ in
+            EmptyResponse()
+        }
     }
 }

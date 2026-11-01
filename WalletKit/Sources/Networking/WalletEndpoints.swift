@@ -29,7 +29,9 @@ enum WalletEndpoints {
         -> Endpoint<TransactionPageDTO>
     {
         var query = [URLQueryItem(name: "limit", value: String(limit))]
-        if let cursor { query.append(URLQueryItem(name: "cursor", value: cursor)) }
+        if let cursor {
+            query.append(URLQueryItem(name: "cursor", value: cursor))
+        }
         return get("/v1/accounts/\(try pathID(accountID))/transactions", query: query)
     }
 

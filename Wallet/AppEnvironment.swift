@@ -38,6 +38,9 @@ struct AppEnvironment: Sendable {
 
     /// "Domain.Money" -> "Domain". For modules whose Phase 1 placeholder has been replaced.
     private static func moduleName(of type: Any.Type) -> String {
-        String(String(reflecting: type).prefix { $0 != "." })
+        String(
+            String(reflecting: type).prefix {
+                $0 != "."
+            })
     }
 }

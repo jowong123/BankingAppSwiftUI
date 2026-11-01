@@ -16,7 +16,9 @@ struct TokenAuthenticator: AsyncBearerAuthenticator {
             .where("tokenHash", .equal, Tokens.hash(bearer.token))
             .where("kind", .equal, "access")
             .first(decoding: TokenRow.self)
-        guard let row, row.revoked == 0, row.expiresAt > clock.nowMillis else { return }
+        guard let row, row.revoked == 0, row.expiresAt > clock.nowMillis else {
+            return
+        }
         request.auth.login(AuthenticatedUser(id: row.userId))
     }
 }

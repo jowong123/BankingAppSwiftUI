@@ -131,15 +131,21 @@ struct TransfersController: Sendable {
             let quote = try await sql.select().column("*").from("quotes")
                 .where("id", .equal, body.quoteId).where("userId", .equal, userID)
                 .first(decoding: QuoteRow.self)
-        else { throw APIFailure.notFound }
+        else {
+            throw APIFailure.notFound
+        }
         // The instant of expiry counts as expired, matching the app's `FXQuote.isExpired`.
-        guard now < quote.expiresAt else { throw APIFailure.quoteExpired }
+        guard now < quote.expiresAt else {
+            throw APIFailure.quoteExpired
+        }
 
         guard
             let recipient = try await sql.select().column("*").from("recipients")
                 .where("id", .equal, body.recipientId).where("userId", .equal, userID)
                 .first(decoding: RecipientRow.self)
-        else { throw APIFailure.notFound }
+        else {
+            throw APIFailure.notFound
+        }
         guard recipient.currency == quote.targetCurrency else {
             throw APIFailure.invalid("Recipient currency doesn't match the quote.")
         }
@@ -148,15 +154,21 @@ struct TransfersController: Sendable {
             let account = try await sql.select().column("*").from("accounts")
                 .where("id", .equal, body.sourceAccountId).where("userId", .equal, userID)
                 .first(decoding: AccountRow.self)
-        else { throw APIFailure.notFound }
+        else {
+            throw APIFailure.notFound
+        }
         guard account.currency == quote.sourceCurrency else {
             throw APIFailure.invalid("Account currency doesn't match the quote.")
         }
-        guard account.balanceMinor >= quote.sourceMinor else { throw APIFailure.insufficientFunds }
+        guard account.balanceMinor >= quote.sourceMinor else {
+            throw APIFailure.insufficientFunds
+        }
 
         let quoteUsed = try await sql.select().column("id").from("transfers")
             .where("quoteId", .equal, quote.id).first()
-        guard quoteUsed == nil else { throw APIFailure.quoteUsed }
+        guard quoteUsed == nil else {
+            throw APIFailure.quoteUsed
+        }
 
         return Checked(quote: quote, recipient: recipient, account: account)
     }
@@ -173,10 +185,14 @@ struct TransfersController: Sendable {
             let row = try await sql.select().column("*").from("transfers")
                 .where("id", .equal, id)
                 .first(decoding: TransferRow.self)
-        else { return nil }
+        else {
+            return nil
+        }
         // Another user's transfer is "not found", as on every other route, so the reply never
         // confirms that someone else's ID exists.
-        guard row.userId == userID else { throw APIFailure.notFound }
+        guard row.userId == userID else {
+            throw APIFailure.notFound
+        }
         guard row.quoteId == body.quoteId, row.recipientId == body.recipientId,
             row.sourceAccountId == body.sourceAccountId
         else {
@@ -192,7 +208,9 @@ struct TransfersController: Sendable {
             let row = try await request.sql.select().column("*").from("transfers")
                 .where("id", .equal, id.lowercased()).where("userId", .equal, user.id)
                 .first(decoding: TransferRow.self)
-        else { throw APIFailure.notFound }
+        else {
+            throw APIFailure.notFound
+        }
         return TransferDTO(row)
     }
 }

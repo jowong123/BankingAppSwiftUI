@@ -28,11 +28,15 @@ public actor AuthInterceptor: Interceptor {
     }
 
     public func intercept(_ request: HTTPRequest, next: HTTPNext) async throws -> HTTPResponse {
-        guard request.requiresAuthentication else { return try await next(request) }
+        guard request.requiresAuthentication else {
+            return try await next(request)
+        }
 
         let token = await accessToken()
         let response = try await next(Self.authorized(request, token: token))
-        guard response.statusCode == 401 else { return response }
+        guard response.statusCode == 401 else {
+            return response
+        }
 
         let newToken: String
         do {
@@ -41,7 +45,9 @@ public actor AuthInterceptor: Interceptor {
             throw HTTPError.unauthorized
         }
         let retried = try await next(Self.authorized(request, token: newToken))
-        guard retried.statusCode != 401 else { throw HTTPError.unauthorized }
+        guard retried.statusCode != 401 else {
+            throw HTTPError.unauthorized
+        }
         return retried
     }
 
@@ -59,9 +65,13 @@ public actor AuthInterceptor: Interceptor {
         }
         // Unstructured on purpose: other requests await this same task, so cancelling the
         // caller that started it must not cancel the refresh they are all waiting on.
-        let task = Task { [refresh] in try await refresh() }
+        let task = Task { [refresh] in
+            try await refresh()
+        }
         refreshTask = task
-        defer { refreshTask = nil }
+        defer {
+            refreshTask = nil
+        }
         return try await task.value
     }
 
@@ -78,7 +88,9 @@ public actor AuthInterceptor: Interceptor {
     }
 
     private static func authorized(_ request: HTTPRequest, token: String?) -> HTTPRequest {
-        guard let token else { return request }
+        guard let token else {
+            return request
+        }
         var request = request
         request.setHeader(HTTPHeader.authorization, "Bearer \(token)")
         return request

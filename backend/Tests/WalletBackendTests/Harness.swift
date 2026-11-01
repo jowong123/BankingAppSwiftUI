@@ -20,7 +20,9 @@ struct Harness {
         json: (any Encodable)? = nil
     ) async throws -> XCTHTTPResponse {
         var headers = headers
-        if let token { headers.bearerAuthorization = BearerAuthorization(token: token) }
+        if let token {
+            headers.bearerAuthorization = BearerAuthorization(token: token)
+        }
         var body = ByteBuffer()
         if let json {
             headers.contentType = .json
@@ -73,7 +75,9 @@ func withApp(simulation: Bool = true, _ test: (Harness) async throws -> Void) as
 }
 
 extension XCTHTTPResponse {
-    var envelope: ErrorEnvelope? { try? content.decode(ErrorEnvelope.self) }
+    var envelope: ErrorEnvelope? {
+        try? content.decode(ErrorEnvelope.self)
+    }
 }
 
 extension ErrorEnvelope: Equatable {

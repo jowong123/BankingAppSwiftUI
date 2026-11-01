@@ -24,7 +24,9 @@ actor StubTransport: HTTPTransport {
 
     func send(_ request: URLRequest) async throws -> HTTPResponse {
         requests.append(request)
-        if let handler { return try await handler(request) }
+        if let handler {
+            return try await handler(request)
+        }
         let next = script.count > 1 ? script.removeFirst() : script[0]
         return try next.get()
     }
@@ -55,7 +57,9 @@ func makeClient(
 }
 
 func requireBaseURL() throws -> URL {
-    guard let baseURL else { throw HTTPError.invalidRequest }
+    guard let baseURL else {
+        throw HTTPError.invalidRequest
+    }
     return baseURL
 }
 
@@ -63,8 +67,12 @@ func requireBaseURL() throws -> URL {
 func instantRetry(_ recorder: SleepRecorder = SleepRecorder(), maxAttempts: Int = 3) -> RetryInterceptor {
     RetryInterceptor(
         policy: RetryPolicy(maxAttempts: maxAttempts),
-        sleep: { await recorder.sleep($0) },
-        unitRandom: { 1 }
+        sleep: {
+            await recorder.sleep($0)
+        },
+        unitRandom: {
+            1
+        }
     )
 }
 

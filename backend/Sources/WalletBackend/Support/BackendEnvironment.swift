@@ -33,16 +33,31 @@ struct BackendEnvironment: Sendable {
 struct BackendClock: Sendable {
     let now: @Sendable () -> Date
 
-    static let system = BackendClock { Date() }
+    static let system = BackendClock {
+        Date()
+    }
 
     /// A clock tests can move forward.
     static func manual(start: Date) -> (BackendClock, @Sendable (TimeInterval) -> Void) {
         let box = NIOLockedValueBox(start)
-        let clock = BackendClock { box.withLockedValue { $0 } }
-        return (clock, { seconds in box.withLockedValue { $0 += seconds } })
+        let clock = BackendClock {
+            box.withLockedValue {
+                $0
+            }
+        }
+        return (
+            clock,
+            { seconds in
+                box.withLockedValue {
+                    $0 += seconds
+                }
+            }
+        )
     }
 
-    var nowMillis: Int64 { Int64((now().timeIntervalSince1970 * 1000).rounded(.down)) }
+    var nowMillis: Int64 {
+        Int64((now().timeIntervalSince1970 * 1000).rounded(.down))
+    }
 }
 
 extension Date {

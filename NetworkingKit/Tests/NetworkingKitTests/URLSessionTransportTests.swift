@@ -20,7 +20,9 @@ final class StubURLProtocol: URLProtocol {
     private static let handlers = OSAllocatedUnfairLock<[String: Handler]>(initialState: [:])
 
     static func register(host: String, handler: @escaping Handler) {
-        handlers.withLock { $0[host] = handler }
+        handlers.withLock {
+            $0[host] = handler
+        }
     }
 
     static func session() -> URLSession {
@@ -29,12 +31,20 @@ final class StubURLProtocol: URLProtocol {
         return URLSession(configuration: configuration)
     }
 
-    override static func canInit(with request: URLRequest) -> Bool { true }
-    override static func canonicalRequest(for request: URLRequest) -> URLRequest { request }
+    override static func canInit(with request: URLRequest) -> Bool {
+        true
+    }
+    override static func canonicalRequest(for request: URLRequest) -> URLRequest {
+        request
+    }
 
     override func startLoading() {
         let host = request.url?.host() ?? ""
-        guard let handler = Self.handlers.withLock({ $0[host] }), let url = request.url else {
+        guard
+            let handler = Self.handlers.withLock({
+                $0[host]
+            }), let url = request.url
+        else {
             client?.urlProtocol(self, didFailWithError: URLError(.unsupportedURL))
             return
         }
@@ -93,7 +103,9 @@ final class StubURLProtocol: URLProtocol {
 
     @Test func urlErrorsBecomeTransportErrors() async throws {
         let host = "offline.\(UUID().uuidString).test"
-        StubURLProtocol.register(host: host) { _ in throw URLError(.notConnectedToInternet) }
+        StubURLProtocol.register(host: host) { _ in
+            throw URLError(.notConnectedToInternet)
+        }
         let transport = URLSessionTransport(session: StubURLProtocol.session())
         let url = try #require(URL(string: "https://\(host)/v1/accounts"))
 
@@ -129,7 +141,9 @@ final class StubURLProtocol: URLProtocol {
         StubURLProtocol.register(host: origin) { _ in
             StubURLProtocol.Reply(status: 307, headers: ["Location": targetURL.absoluteString], redirect: targetURL)
         }
-        StubURLProtocol.register(host: target) { _ in StubURLProtocol.Reply(status: 200) }
+        StubURLProtocol.register(host: target) { _ in
+            StubURLProtocol.Reply(status: 200)
+        }
         let url = try #require(URL(string: "https://\(origin)/v1/auth/refresh"))
         var request = URLRequest(url: url)
         request.httpMethod = "POST"

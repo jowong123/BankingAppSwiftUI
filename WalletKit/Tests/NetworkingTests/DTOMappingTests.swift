@@ -86,14 +86,18 @@ import Testing
             from: quoteJSON(fee: #"{"amountMinor":150,"currency":"USD"}"#)
         )
 
-        #expect(throws: APIError.invalidResponse("quote")) { try dto.quote() }
+        #expect(throws: APIError.invalidResponse("quote")) {
+            try dto.quote()
+        }
     }
 
     @Test(arguments: ["abc", "", "0", "-1.2", "1,5", "1.2abc", "1e3", " 1.5", ".5"])
     func invalidRateIsRejected(rate: String) throws {
         let dto = try WalletJSON.decoder().decode(QuoteDTO.self, from: quoteJSON(rate: rate))
 
-        #expect(throws: APIError.self) { try dto.quote() }
+        #expect(throws: APIError.self) {
+            try dto.quote()
+        }
     }
 }
 
@@ -131,5 +135,7 @@ import Testing
 
 /// What `dump`, debuggers and test diffs see: every child of the value's mirror.
 private func reflected(_ value: Any) -> String {
-    Mirror(reflecting: value).children.map { "\($0.label ?? ""): \($0.value)" }.joined(separator: ", ")
+    Mirror(reflecting: value).children.map {
+        "\($0.label ?? ""): \($0.value)"
+    }.joined(separator: ", ")
 }

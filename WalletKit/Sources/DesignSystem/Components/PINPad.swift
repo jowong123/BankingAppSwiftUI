@@ -43,7 +43,9 @@ public struct PINPad: View {
         Grid(horizontalSpacing: Spacing.xLarge, verticalSpacing: Spacing.large) {
             ForEach([[1, 2, 3], [4, 5, 6], [7, 8, 9]], id: \.self) { row in
                 GridRow {
-                    ForEach(row, id: \.self) { digitKey($0) }
+                    ForEach(row, id: \.self) {
+                        digitKey($0)
+                    }
                 }
             }
             GridRow {

@@ -74,11 +74,15 @@ let package = Package(
     defaultLocalization: "en",
     // macOS is declared only so `swift test` runs on the host and in CI.
     platforms: [.iOS(.v17), .macOS(.v14)],
-    products: modules.map { .library(name: $0, targets: [$0]) },
+    products: modules.map {
+        .library(name: $0, targets: [$0])
+    },
     // Standalone generic HTTP package next to WalletKit (ADR-012).
     dependencies: [.package(path: "../NetworkingKit")],
     targets: targets
-        + modules.map { .testTarget(name: "\($0)Tests", dependencies: testDependencies($0)) }
+        + modules.map {
+            .testTarget(name: "\($0)Tests", dependencies: testDependencies($0))
+        }
 )
 
 /// Each test target sees its own module. NetworkingTests also sees NetworkingKit so it

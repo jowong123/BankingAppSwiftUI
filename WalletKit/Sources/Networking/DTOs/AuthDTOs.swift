@@ -4,15 +4,23 @@ struct LoginRequestDTO: Encodable, Sendable, CustomStringConvertible, CustomRefl
     let email: String
     let password: String
 
-    var description: String { "LoginRequestDTO(<redacted>)" }
-    var customMirror: Mirror { Mirror(self, children: [:]) }
+    var description: String {
+        "LoginRequestDTO(<redacted>)"
+    }
+    var customMirror: Mirror {
+        Mirror(self, children: [:])
+    }
 }
 
 struct RefreshRequestDTO: Encodable, Sendable, CustomStringConvertible, CustomReflectable {
     let refreshToken: String
 
-    var description: String { "RefreshRequestDTO(<redacted>)" }
-    var customMirror: Mirror { Mirror(self, children: [:]) }
+    var description: String {
+        "RefreshRequestDTO(<redacted>)"
+    }
+    var customMirror: Mirror {
+        Mirror(self, children: [:])
+    }
 }
 
 /// Tokens from login and refresh. They go straight to the Keychain (Phase 5).
@@ -25,8 +33,14 @@ public struct SessionTokensDTO: Decodable, Hashable, Sendable, CustomStringConve
     /// Access-token lifetime in seconds.
     public let expiresIn: Int
 
-    public var description: String { "SessionTokensDTO(<redacted>)" }
-    public var debugDescription: String { description }
+    public var description: String {
+        "SessionTokensDTO(<redacted>)"
+    }
+    public var debugDescription: String {
+        description
+    }
     /// Empty, so `dump`, debuggers and test-failure diffs can't print the tokens either.
-    public var customMirror: Mirror { Mirror(self, children: [:]) }
+    public var customMirror: Mirror {
+        Mirror(self, children: [:])
+    }
 }

@@ -7,7 +7,9 @@ struct APIFailure: AbortError, Equatable {
     let code: String
     let message: String
 
-    var reason: String { message }
+    var reason: String {
+        message
+    }
 
     static let unauthorized = APIFailure(status: .unauthorized, code: "unauthorized", message: "Sign in again.")
     static let invalidCredentials = APIFailure(

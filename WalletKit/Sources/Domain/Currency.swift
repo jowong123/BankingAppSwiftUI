@@ -11,7 +11,11 @@ public struct Currency: Hashable, Sendable {
     /// Validates the code shape and the minor-unit range; it does not check the code
     /// against the ISO list, so the backend can add currencies without an app release.
     public init(code: String, minorUnits: Int) throws(MoneyError) {
-        let isISOShape = code.count == 3 && code.allSatisfy { $0.isASCII && $0.isUppercase }
+        let isISOShape =
+            code.count == 3
+            && code.allSatisfy {
+                $0.isASCII && $0.isUppercase
+            }
         guard isISOShape, (0...4).contains(minorUnits) else {
             throw .invalidCurrency(code: code, minorUnits: minorUnits)
         }
@@ -37,6 +41,8 @@ public struct Currency: Hashable, Sendable {
 
     /// The supported currency with this code, or `nil` if the app doesn't know it.
     public static func supported(code: String) -> Currency? {
-        supported.first { $0.code == code }
+        supported.first {
+            $0.code == code
+        }
     }
 }

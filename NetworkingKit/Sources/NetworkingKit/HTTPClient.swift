@@ -40,7 +40,9 @@ public struct HTTPClient: Sendable {
         }
         // Fold from the innermost interceptor outwards, so interceptors[0] runs first.
         let chain = interceptors.reversed().reduce(send) { next, interceptor in
-            { request in try await interceptor.intercept(request, next: next) }
+            { request in
+                try await interceptor.intercept(request, next: next)
+            }
         }
         return try await chain(request)
     }
@@ -53,7 +55,9 @@ public struct HTTPClient: Sendable {
         if !request.queryItems.isEmpty {
             components.queryItems = request.queryItems
         }
-        guard let finalURL = components.url else { throw HTTPError.invalidRequest }
+        guard let finalURL = components.url else {
+            throw HTTPError.invalidRequest
+        }
         // Never read or write the URL cache: responses hold balances and payee details, and
         // Cache.db doesn't get the app's `.complete` file protection (SPEC section 6).
         var urlRequest = URLRequest(url: finalURL, cachePolicy: .reloadIgnoringLocalAndRemoteCacheData)
@@ -77,7 +81,9 @@ extension HTTPClient {
         -> [any Interceptor]
     {
         var chain: [any Interceptor] = [RequestIDInterceptor(), IdempotencyInterceptor()]
-        if let auth { chain.append(auth) }
+        if let auth {
+            chain.append(auth)
+        }
         chain.append(retry)
         return chain
     }

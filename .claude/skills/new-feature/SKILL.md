@@ -38,11 +38,23 @@ public final class $ARGUMENTSRouter {
     public var path = NavigationPath()
     public var sheet: $ARGUMENTSRoute?
     public init() {}
-    public func push(_ route: $ARGUMENTSRoute) { path.append(route) }
-    public func pop() { if !path.isEmpty { path.removeLast() } }
-    public func popToRoot() { path = NavigationPath() }
-    public func present(_ route: $ARGUMENTSRoute) { sheet = route }
-    public func dismiss() { sheet = nil }
+    public func push(_ route: $ARGUMENTSRoute) {
+        path.append(route)
+    }
+    public func pop() {
+        if !path.isEmpty {
+            path.removeLast()
+        }
+    }
+    public func popToRoot() {
+        path = NavigationPath()
+    }
+    public func present(_ route: $ARGUMENTSRoute) {
+        sheet = route
+    }
+    public func dismiss() {
+        sheet = nil
+    }
 }
 
 public struct $ARGUMENTSFlowView: View {
@@ -52,7 +64,9 @@ public struct $ARGUMENTSFlowView: View {
 
 @Observable @MainActor
 final class <Screen>ViewModel {
-    struct State: Equatable { /* everything the view renders */ }
+    struct State: Equatable {
+        // everything the view renders
+    }
     private(set) var state = State()
     init(dependencies: $ARGUMENTSDependencies, router: $ARGUMENTSRouter)
     func onAppear() async

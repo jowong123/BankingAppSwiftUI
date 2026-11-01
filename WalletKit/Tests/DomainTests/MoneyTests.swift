@@ -75,13 +75,19 @@ import Testing
             amount: Money(amountMinor: .max, currency: currency).amount + oneMinorUnit, currency: currency)
         let belowMin = Money(
             amount: Money(amountMinor: .min, currency: currency).amount - oneMinorUnit, currency: currency)
-        #expect(throws: MoneyError.overflow) { try aboveMax.amountMinor() }
-        #expect(throws: MoneyError.overflow) { try belowMin.amountMinor() }
+        #expect(throws: MoneyError.overflow) {
+            try aboveMax.amountMinor()
+        }
+        #expect(throws: MoneyError.overflow) {
+            try belowMin.amountMinor()
+        }
     }
 
     @Test func nanThrowsOverflowInsteadOfCrashing() {
         let money = Money(amount: .nan, currency: .sgd)
-        #expect(throws: MoneyError.overflow) { try money.amountMinor() }
+        #expect(throws: MoneyError.overflow) {
+            try money.amountMinor()
+        }
     }
 }
 
@@ -98,9 +104,15 @@ import Testing
 
     @Test func mixedCurrenciesThrow() {
         let mismatch = MoneyError.currencyMismatch(expected: .sgd, actual: .usd)
-        #expect(throws: mismatch) { try tenSGD.adding(tenUSD) }
-        #expect(throws: mismatch) { try tenSGD.subtracting(tenUSD) }
-        #expect(throws: mismatch) { try tenSGD.compare(to: tenUSD) }
+        #expect(throws: mismatch) {
+            try tenSGD.adding(tenUSD)
+        }
+        #expect(throws: mismatch) {
+            try tenSGD.subtracting(tenUSD)
+        }
+        #expect(throws: mismatch) {
+            try tenSGD.compare(to: tenUSD)
+        }
     }
 
     @Test func comparesWithinOneCurrency() throws {

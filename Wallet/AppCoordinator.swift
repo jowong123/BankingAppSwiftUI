@@ -11,7 +11,9 @@ final class AppCoordinator {
         self.environment = environment
     }
 
-    var linkedModuleCount: Int { environment.linkedModules.count }
+    var linkedModuleCount: Int {
+        environment.linkedModules.count
+    }
 }
 
 struct AppRootView: View {
