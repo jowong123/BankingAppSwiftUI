@@ -1,33 +1,38 @@
+import AccountsFeature
 import Observation
 import SwiftUI
 
-/// Composes the feature flows and handles their output closures.
-/// Phase 1 placeholder: shows a root screen until the first feature lands.
+/// Composes the feature flows and handles their output closures. Accounts is the only
+/// flow so far; auth (Phase 5) and transfers (Phase 6) are added here.
 @Observable @MainActor
 final class AppCoordinator {
+    let accountsRouter = AccountsRouter()
     private let environment: AppEnvironment
 
     init(environment: AppEnvironment) {
         self.environment = environment
     }
 
-    var linkedModuleCount: Int {
-        environment.linkedModules.count
+    var accountsDependencies: AccountsDependencies {
+        environment.accounts
     }
+
+    /// Phase 5 routes this to sign-in. Until then there is no session to end, and the
+    /// Accounts screen already shows "Session expired".
+    func sessionExpired() {}
 }
 
 struct AppRootView: View {
     let coordinator: AppCoordinator
 
     var body: some View {
-        VStack(spacing: 8) {
-            Text("Wallet")
-                .font(.largeTitle.bold())
-            Text("\(coordinator.linkedModuleCount) modules linked")
-                .foregroundStyle(.secondary)
-        }
-        .accessibilityElement(children: .combine)
-        .accessibilityIdentifier("app.root")
+        AccountsFlowView(
+            router: coordinator.accountsRouter,
+            dependencies: coordinator.accountsDependencies,
+            onSessionExpired: {
+                coordinator.sessionExpired()
+            }
+        )
     }
 }
 
