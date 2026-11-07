@@ -28,10 +28,3 @@ public struct MoneyDTO: Codable, Hashable, Sendable {
         return Money(amountMinor: amountMinor, currency: currency)
     }
 }
-
-/// `{ "code", "message", "requestId" }`, the body of every non-2xx response.
-struct ErrorEnvelopeDTO: Decodable {
-    let code: String
-    let message: String
-    let requestId: String?
-}

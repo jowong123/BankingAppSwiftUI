@@ -40,74 +40,28 @@ public struct PrimaryButton: View {
     }
 }
 
-/// Round accent button with a caption underneath, e.g. "Add money" or "Freeze card".
-public struct CircleIconButton: View {
-    private let title: String
-    private let systemImage: String
-    private let action: () -> Void
-    @ScaledMetric(relativeTo: .title2) private var diameter: CGFloat = 56
-
-    public init(_ title: String, systemImage: String, action: @escaping () -> Void) {
-        self.title = title
-        self.systemImage = systemImage
-        self.action = action
-    }
-
-    public var body: some View {
-        Button(action: action) {
-            VStack(spacing: Spacing.small) {
-                Image(systemName: systemImage)
-                    .font(.title2)
-                    .foregroundStyle(Palette.onAccent)
-                    .frame(width: diameter, height: diameter)
-                    .background(Circle().fill(Palette.accent))
-                Text(title)
-                    .font(Typography.caption)
-                    .foregroundStyle(Palette.textPrimary)
-                    .multilineTextAlignment(.center)
-            }
-        }
-        .buttonStyle(PressableStyle())
-        .accessibilityLabel(title)
-    }
-}
-
-/// Slight shrink on press, shared by the buttons in this file.
-private struct PressableStyle: ButtonStyle {
-    func makeBody(configuration: Configuration) -> some View {
-        configuration.label
-            .scaleEffect(configuration.isPressed ? 0.96 : 1)
-            .animation(.easeOut(duration: 0.15), value: configuration.isPressed)
-    }
-}
-
 #Preview("Light") {
-    ButtonsPreview()
+    PrimaryButtonPreview()
 }
 
 #Preview("Dark") {
-    ButtonsPreview()
+    PrimaryButtonPreview()
         .preferredColorScheme(.dark)
 }
 
 #Preview("Accessibility 5") {
-    ButtonsPreview()
+    PrimaryButtonPreview()
         .preferredColorScheme(.dark)
         .dynamicTypeSize(.accessibility5)
 }
 
-private struct ButtonsPreview: View {
+private struct PrimaryButtonPreview: View {
     var body: some View {
         ScrollView {
             VStack(spacing: Spacing.large) {
                 PrimaryButton("Send money") {}
                 PrimaryButton("Send money", isLoading: true) {}
                 PrimaryButton("Send money") {}.disabled(true)
-                HStack(alignment: .top, spacing: Spacing.xLarge) {
-                    CircleIconButton("Add money", systemImage: "plus") {}
-                    CircleIconButton("Card details", systemImage: "creditcard") {}
-                    CircleIconButton("Freeze card", systemImage: "snowflake") {}
-                }
             }
             .padding(Spacing.large)
         }

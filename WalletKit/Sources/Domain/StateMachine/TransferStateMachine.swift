@@ -22,3 +22,7 @@ public enum TransferStateMachine {
         }
     }
 }
+
+public enum TransferTransitionError: Error, Equatable, Sendable {
+    case invalid(from: TransferState, event: TransferEvent)
+}
