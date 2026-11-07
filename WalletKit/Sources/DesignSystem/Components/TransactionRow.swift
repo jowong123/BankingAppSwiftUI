@@ -3,8 +3,8 @@ import SwiftUI
 
 /// One line in a transaction list: avatar, title, subtitle and amount.
 ///
-/// Takes plain values rather than a domain `Transaction` type, which doesn't exist
-/// until Phase 4. Incoming amounts get a "+" and the positive colour.
+/// Takes plain values rather than `AccountTransaction`, so the same row also shows
+/// transfers and other lists. Incoming amounts get a "+" and the positive colour.
 public struct TransactionRow: View {
     public enum Direction: Sendable {
         case incoming

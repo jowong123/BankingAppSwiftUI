@@ -1,0 +1,32 @@
+/* Every user-visible string in AccountsFeature. English only (SPEC section 2).
+   Read through `AccountsStrings`; add new text here and a property there. */
+
+/* Title of the accounts screen. */
+"accounts.title" = "Accounts";
+
+/* Empty accounts list. */
+"accounts.empty" = "No accounts yet";
+
+/* Banner when a refresh fails but earlier data is still on screen. */
+"accounts.refreshFailed" = "Couldn't update. Pull down to try again.";
+
+/* Empty transaction history. */
+"accounts.transactions.empty" = "No transactions yet";
+
+/* Footer when loading the next page of history fails. */
+"accounts.transactions.loadMoreFailed" = "Couldn't load more transactions.";
+
+/* Button that repeats a failed load. */
+"accounts.retry" = "Retry";
+
+/* Error title and message when there is no connection. */
+"accounts.error.offline.title" = "You're offline";
+"accounts.error.offline.message" = "Check your connection and try again.";
+
+/* Error title and message for a server failure. */
+"accounts.error.failed.title" = "Something went wrong";
+"accounts.error.failed.message" = "Please try again in a moment.";
+
+/* Error title and message when the session has ended. */
+"accounts.error.sessionExpired.title" = "Session expired";
+"accounts.error.sessionExpired.message" = "Sign in again to continue.";

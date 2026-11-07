@@ -63,7 +63,7 @@ let targets: [Target] = [
     .target(name: Module.authFeature, dependencies: featureCore),
     .target(
         name: Module.onboardingFeature, dependencies: featureCore + [.target(name: Module.identitySDK)]),
-    .target(name: Module.accountsFeature, dependencies: featureCore),
+    .target(name: Module.accountsFeature, dependencies: featureCore, resources: [.process("Resources")]),
     .target(name: Module.transferFeature, dependencies: featureCore),
 ]
 
