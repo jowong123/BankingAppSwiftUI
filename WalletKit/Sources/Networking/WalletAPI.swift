@@ -90,18 +90,26 @@ public struct WalletAPI: Sendable {
 
     // MARK: - Accounts
 
-    public func accounts() async throws(APIError) -> [AccountDTO] {
-        try await send(WalletEndpoints.accounts()).accounts
+    public func accounts() async throws(APIError) -> [Account] {
+        var accounts: [Account] = []
+        for dto in try await send(WalletEndpoints.accounts()).accounts {
+            accounts.append(try dto.account())
+        }
+        return accounts
     }
 
     public func transactions(accountID: String, cursor: String? = nil, limit: Int = 20)
-        async throws(APIError) -> TransactionPageDTO
+        async throws(APIError) -> TransactionPage
     {
-        try await send(WalletEndpoints.transactions(accountID: accountID, cursor: cursor, limit: limit))
+        try await send(WalletEndpoints.transactions(accountID: accountID, cursor: cursor, limit: limit)).page()
     }
 
-    public func recipients() async throws(APIError) -> [RecipientDTO] {
-        try await send(WalletEndpoints.recipients()).recipients
+    public func recipients() async throws(APIError) -> [Recipient] {
+        var recipients: [Recipient] = []
+        for dto in try await send(WalletEndpoints.recipients()).recipients {
+            recipients.append(try dto.recipient())
+        }
+        return recipients
     }
 
     // MARK: - Transfers

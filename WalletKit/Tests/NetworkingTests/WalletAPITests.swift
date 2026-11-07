@@ -107,7 +107,8 @@ let transferJSON = """
 
         let accounts = try await api.accounts()
 
-        #expect(try accounts.first?.balance.money() == Money(amountMinor: 125_000, currency: .jpy))
+        #expect(accounts.first?.balance == Money(amountMinor: 125_000, currency: .jpy))
+        #expect(accounts.first?.currency == .jpy)
         #expect(await transport.requests.first?.value(forHTTPHeaderField: "Authorization") == "Bearer access_1")
     }
 
@@ -236,7 +237,9 @@ let transferJSON = """
         let page = try await api.transactions(accountID: "acc_sgd")
 
         #expect(page.nextCursor == nil)
-        #expect(try page.items.first?.amount.money() == Money(amountMinor: -450, currency: .sgd))
+        #expect(page.items.first?.amount == Money(amountMinor: -450, currency: .sgd))
+        #expect(page.items.first?.direction == .outgoing)
+        #expect(!page.hasMore)
     }
 
     @Test func sessionNeverCachesOrStoresCookies() {
