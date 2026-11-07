@@ -24,7 +24,7 @@ Multi-currency wallet app for iOS with bank-grade security. Senior-level portfol
 | Modularization | Local SPM package with App / Features / Core / SDK layers | Features never import features |
 | Project | Plain Xcode project + local `Package.swift` | Tuist noted in ADR-013 as the team-scale option |
 | Design system | Own `DesignSystem` package: tokens + components | Every component has previews |
-| Persistence | SwiftData cache with `.complete` file protection | Secrets in Keychain only |
+| Persistence | SwiftData for the transfer outbox, `.complete` file protection | No account data cached on device (ADR-017); secrets in Keychain only |
 | Networking | Custom `URLSession` client, async/await | Interceptors: auth, idempotency, signing, retry, pinning |
 | Backend | Vapor (Swift) + Fluent SQLite | FX quotes, transfers, signature verification |
 | DI | Manual constructor injection | Wired in the App composition root |
@@ -33,7 +33,7 @@ Multi-currency wallet app for iOS with bank-grade security. Senior-level portfol
 | CI/CD | GitHub Actions + Fastlane | Lint + test on PR; TestFlight on tag |
 | Lint | SwiftLint + swift-format | Enforced in CI |
 | Observability | OSLog with privacy redaction + Sentry | No PII in logs or crashes |
-| Languages | English, Simplified Chinese | RTL-safe layouts |
+| Languages | English only | Each feature's text in `Resources/en.lproj/Localizable.strings`, read through a `<Name>Strings` enum |
 | Docs | DocC for SDK and Core | ADRs in `docs/adr/` |
 
 ## 3. Module structure
@@ -130,7 +130,7 @@ Enforced by `Package.swift` target dependencies, so a forbidden import fails to 
 
 **Concurrency**
 - Swift 6 language mode, complete strict concurrency everywhere.
-- UI types are `@MainActor`. Shared mutable state lives in actors: `SessionStore`, `BalanceStore`, `TransferOutbox`.
+- UI types are `@MainActor`. Shared mutable state lives in actors: `SessionStore`, `TransferOutbox`.
 - Domain models are `Sendable` value types. Leaving a screen cancels its `.task {}` work.
 
 **App lifecycle**
@@ -200,7 +200,7 @@ Biometric enrolment change invalidates the key (`.biometryCurrentSet`); the user
 **Storage**
 - Keychain (`kSecAttrAccessibleWhenUnlockedThisDeviceOnly`): access token, refresh token, device ID.
 - Secure Enclave: signing private key, never exported.
-- SwiftData: `.complete` file protection; cached balances and transactions only.
+- SwiftData: `.complete` file protection; the transfer outbox only. Balances and transactions are never stored on the device (ADR-017).
 - Never: UserDefaults for sensitive data, secrets in source, PII in logs.
 
 **Network**
@@ -292,6 +292,7 @@ Template: `docs/adr/000-template.md`.
 | 014 | Swift 6 strict concurrency everywhere | Swift 5 mode in some modules |
 | 015 | OSLog + Sentry with scrubbing | Firebase Crashlytics |
 | 016 | Sandbox backend: SQLKit rows, hashed rotating tokens with grace window, two-layer idempotency | Fluent models with `@unchecked Sendable`; JWT; middleware-only idempotency |
+| 017 | No offline cache of account data; Accounts is online only | SwiftData cache of balances (and recent history) |
 
 ## 10. Build plan (10 weeks)
 
@@ -309,19 +310,20 @@ Run each phase with `/phase <n>`. Review every diff before committing.
 - Task: Vapor backend per section 7 with seed data and simulation headers (device binding and signing endpoints come in Phase 7). `NetworkingKit`: `HTTPClient`, interceptor chain (auth, idempotency, retry with backoff, request ID). `Networking`: Wallet endpoints and DTOs.
 - Done when: backend tests pass; a retried POST reuses the same idempotency key.
 
-### Phase 4 (week 4): Accounts + offline cache
-- Task: AccountsFeature (balances per currency, paginated history, pull to refresh). Persistence with SwiftData and `.complete` protection; offline balances with "last updated".
-- Done when: airplane mode still shows cached balances; VoiceOver reads amounts with currency.
-- Carried over from the Phase 3 review: `WalletAPI` returns public DTOs for accounts, transactions, recipients and transfers. Map them to Domain types inside `Networking` and make the DTOs internal. Add a contract test that the backend's currencies and minor units match `Currency.supported`.
+### Phase 4 (week 4): Accounts
+- Task: AccountsFeature (balances per currency, paginated history, pull to refresh), online only (ADR-017). Runs on sandbox data in the app until Phase 5 provides a session. `WalletAPI` returns Domain types for accounts, transactions and recipients. Shared currency contract test (`contracts/currencies.json`).
+- Done when: offline shows a clear "You're offline" state with Retry and no balances; VoiceOver reads amounts with currency.
 
 ### Phase 5 (week 5): Auth + session
 - Task: AuthFeature and `KeychainStore`: sandbox login, Face ID with PIN fallback, token refresh, inactivity auto-lock, background blur.
 - Done when: tokens only in Keychain; app locks after timeout; app switcher shows no balances.
+- Carried over from Phase 4: in `AppEnvironment`, replace `SandboxAccountsRepository` (Debug) and `UnconnectedAccountsRepository` (Release) with `RemoteAccountsRepository(api:)` once the session store supplies tokens, and delete both. Route `AccountsFlowView`'s `onSessionExpired` to sign-in in `AppCoordinator` (it is a no-op now). Decide how the simulator reaches the local http backend (an ATS exception for local networking in Debug only, or HTTPS locally): that is a security-control decision. A 403 or 404 on a read currently maps to `invalidData` with Retry; revisit once real auth errors exist.
 
 ### Phase 6 (week 6): Transfer flow + outbox
 - Task: TransferFeature: recipient → amount → live quote with fee breakdown and 30 s countdown → review → confirm → result. `TransferOutbox` actor resuming on launch.
 - Done when: double-tap Send creates one transfer; expiry re-quotes visibly; killing the app mid-transfer resumes on relaunch.
 - Carried over from the Phase 3 review: `APIError.isDefiniteRejection` judges one request, not the transfer. The outbox needs its own rule after an unknown outcome. A 404 when polling `GET /v1/transfers/{id}` can mean the create is still in flight, so resend the create with the same ID (safe, it is idempotent on the ID). `idempotency_mismatch` or `transfer_exists` on create means a transfer with this ID exists, so fetch it. Neither is "failed".
+- Carried over from Phase 4: write ADR-009 (SwiftData with `.complete` protection) with the outbox; Persistence is still a placeholder until then. `TransferDTO`, `MoneyDTO` and the transfer methods of `WalletAPI` still expose wire types: map them to a Domain `Transfer` and make them internal.
 
 ### Phase 7 (week 7): Secure Enclave signing + App Attest
 - Task: Device binding and transaction signing per section 6 on iOS and backend. Public-key pinning with backup pin.
@@ -333,7 +335,7 @@ Run each phase with `/phase <n>`. Review every diff before committing.
 - Done when: a real passport reads on device; SDK builds alone; DocC builds without warnings.
 
 ### Phase 9 (week 9): Production hardening
-- Task: Sentry with scrubbing, per-module loggers, screen-recording masking, feature flags with remote kill switch for transfers, Simplified Chinese, XCUITest flows, `release.yml` + Fastlane → TestFlight.
+- Task: Sentry with scrubbing, per-module loggers, screen-recording masking, feature flags with remote kill switch for transfers, XCUITest flows, `release.yml` + Fastlane → TestFlight.
 - Done when: a tag produces a TestFlight build; UI tests pass in CI; no PII in a forced test crash.
 
 ### Phase 10 (week 10): Portfolio polish

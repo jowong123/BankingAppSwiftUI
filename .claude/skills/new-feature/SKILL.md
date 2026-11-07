@@ -27,7 +27,8 @@ $ARGUMENTSFlowView.swift         the only public view: NavigationStack(path:) + 
 Screens/<Screen>View.swift
 Screens/<Screen>ViewModel.swift
 Errors/$ARGUMENTSError.swift
-Resources/Localizable.xcstrings  (en + zh-Hans)
+$ARGUMENTSStrings.swift      reads every user-visible string from the file below; code never uses keys directly
+Resources/en.lproj/Localizable.strings   the English text (English only; add `resources: [.process("Resources")]`)
 ```
 
 ## 3. Shapes to follow

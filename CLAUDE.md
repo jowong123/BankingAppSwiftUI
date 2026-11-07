@@ -10,7 +10,7 @@ The full spec is in `docs/SPEC.md`. Read the relevant section before starting an
 - SwiftUI-first; UIKit only behind wrappers (NFC, camera, screenshot masking)
 - MVVM + Coordinators: `@Observable` view models, one `@Observable` router per flow owning a `NavigationPath`
 - Local SPM package `WalletKit` holds all modules; the Xcode project contains only the app target
-- SwiftData cache (`.complete` file protection), Keychain for secrets, Secure Enclave for signing keys
+- SwiftData for the transfer outbox (`.complete` file protection), no account data cached on device (ADR-017), Keychain for secrets, Secure Enclave for signing keys
 - Custom `URLSession` client with an interceptor chain; Vapor backend in `backend/`
 - Manual constructor injection, wired in `Wallet/AppEnvironment.swift`
 - Swift Testing for unit tests, XCUITest for flows
