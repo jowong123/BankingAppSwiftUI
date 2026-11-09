@@ -30,6 +30,7 @@ func routes(_ app: Application, environment: BackendEnvironment) throws {
     let auth = AuthController(clock: clock, dummyHash: try Bcrypt.hash("unused", cost: environment.bcryptCost))
     api.post("auth", "login", use: auth.login)
     api.post("auth", "refresh", use: auth.refresh)
+    api.post("auth", "logout", use: auth.logout)
 
     let signedIn = api.grouped(
         TokenAuthenticator(clock: clock),

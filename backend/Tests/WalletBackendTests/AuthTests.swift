@@ -180,6 +180,66 @@ final class AuthTests: XCTestCase {
         return try response.content.decode(SessionTokens.self)
     }
 
+    func testLogoutRevokesBothTokensOfTheSession() async throws {
+        try await withApp { harness in
+            let tokens = try await harness.login()
+
+            let response = try await logout(harness, tokens.refreshToken)
+
+            XCTAssertEqual(response.status, .noContent)
+            let access = try await harness.send(.GET, "/v1/accounts", token: tokens.accessToken)
+            XCTAssertEqual(access.status, .unauthorized)
+            let refreshed = try await refresh(harness, tokens.refreshToken)
+            XCTAssertNil(refreshed)
+        }
+    }
+
+    func testLogoutLeavesOtherSessionsSignedIn() async throws {
+        try await withApp { harness in
+            let phone = try await harness.login()
+            let tablet = try await harness.login()
+
+            _ = try await logout(harness, phone.refreshToken)
+
+            let stillIn = try await harness.send(.GET, "/v1/accounts", token: tablet.accessToken)
+            XCTAssertEqual(stillIn.status, .ok)
+        }
+    }
+
+    func testLogoutAlsoRevokesAPairWhoseRefreshResponseWasLost() async throws {
+        try await withApp { harness in
+            let first = try await harness.login()
+            // The server rotated, but the app never got the new pair and still holds `first`.
+            let lost = try await refreshed(harness, first.refreshToken)
+
+            _ = try await logout(harness, first.refreshToken)
+
+            let lostAccess = try await harness.send(.GET, "/v1/accounts", token: lost.accessToken)
+            XCTAssertEqual(lostAccess.status, .unauthorized)
+            let lostRefresh = try await refresh(harness, lost.refreshToken)
+            XCTAssertNil(lostRefresh)
+        }
+    }
+
+    /// Same answer for any token, so the route can't tell an attacker which tokens are live.
+    func testLogoutWithAnUnknownOrUsedTokenIsStill204() async throws {
+        try await withApp { harness in
+            let tokens = try await harness.login()
+
+            let unknown = try await logout(harness, "not-a-token")
+            let first = try await logout(harness, tokens.refreshToken)
+            let again = try await logout(harness, tokens.refreshToken)
+
+            XCTAssertEqual(unknown.status, .noContent)
+            XCTAssertEqual(first.status, .noContent)
+            XCTAssertEqual(again.status, .noContent)
+        }
+    }
+
+    private func logout(_ harness: Harness, _ token: String) async throws -> XCTHTTPResponse {
+        try await harness.send(.POST, "/v1/auth/logout", json: LogoutRequest(refreshToken: token))
+    }
+
     func testExpiredRefreshTokenIsRejected() async throws {
         try await withApp { harness in
             let tokens = try await harness.login()

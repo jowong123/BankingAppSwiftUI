@@ -16,6 +16,10 @@ struct RefreshRequest: Content {
     let refreshToken: String
 }
 
+struct LogoutRequest: Content {
+    let refreshToken: String
+}
+
 struct SessionTokens: Content {
     let accessToken: String
     let refreshToken: String

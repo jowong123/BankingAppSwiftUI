@@ -70,6 +70,33 @@ struct AuthController: Sendable {
         return tokens
     }
 
+    /// Sign-out: revokes the pair the refresh token belongs to, and any pair it was rotated
+    /// into (a refresh whose response the app never received). Other devices stay signed in.
+    ///
+    /// Always 204, for an unknown or already revoked token too, so the route can't be used
+    /// to test whether a token is valid, and a retry is harmless. It needs no access token,
+    /// so signing out still works after the access token has expired.
+    @Sendable func logout(_ request: Request) async throws -> HTTPStatus {
+        let body = try request.content.decode(LogoutRequest.self)
+        var hash: String? = Tokens.hash(body.refreshToken)
+        // A token is replaced at most once, so the chain is short; the bound guards a loop.
+        for _ in 0..<Self.maxRotationsFollowed {
+            guard let current = hash,
+                let row = try await request.sql.select().column("*").from("tokens")
+                    .where("tokenHash", .equal, current)
+                    .where("kind", .equal, "refresh")
+                    .first(decoding: TokenRow.self)
+            else {
+                break
+            }
+            try await request.sql.update("tokens").set("revoked", to: 1).where("pairId", .equal, row.pairId).run()
+            hash = row.replacedBy
+        }
+        return .noContent
+    }
+
+    private static let maxRotationsFollowed = 8
+
     /// Issues a new pair and records which refresh token replaced `old`.
     private func rotate(_ old: TokenRow, sql: any SQLDatabase) async throws -> SessionTokens {
         let issued = try await issueTokens(userID: old.userId, sql: sql)
