@@ -69,6 +69,14 @@ public struct WalletAPI: Sendable {
             HTTPError.status(code: status, body: Data())
         case APIError.unauthorized:
             HTTPError.unauthorized
+        // `SessionStore` reports a failed refresh as `AuthError`. Temporary ones keep the
+        // session, and become the HTTP errors that tell the user what happened.
+        case AuthError.offline:
+            HTTPError.transport(.notConnectedToInternet)
+        case AuthError.unavailable:
+            HTTPError.status(code: 503, body: Data())
+        case AuthError.cancelled:
+            CancellationError()
         default:
             error
         }
@@ -76,16 +84,6 @@ public struct WalletAPI: Sendable {
 
     init(client: HTTPClient) {
         self.client = client
-    }
-
-    // MARK: - Auth
-
-    public func login(email: String, password: String) async throws(APIError) -> SessionTokensDTO {
-        try await send(WalletEndpoints.login(email: email, password: password))
-    }
-
-    public func refresh(refreshToken: String) async throws(APIError) -> SessionTokensDTO {
-        try await send(WalletEndpoints.refresh(refreshToken: refreshToken))
     }
 
     // MARK: - Accounts

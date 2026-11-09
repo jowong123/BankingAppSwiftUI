@@ -21,6 +21,17 @@ enum WalletEndpoints {
         return endpoint
     }
 
+    /// 204 with no body. Safe to retry: revoking twice changes nothing.
+    static func logout(refreshToken: String) throws(APIError) -> Endpoint<EmptyResponse> {
+        Endpoint(
+            request: try postRequest(
+                "/v1/auth/logout",
+                body: LogoutRequestDTO(refreshToken: refreshToken),
+                requiresAuthentication: false
+            )
+        )
+    }
+
     static func accounts() -> Endpoint<AccountsResponseDTO> {
         get("/v1/accounts")
     }
@@ -71,6 +82,17 @@ enum WalletEndpoints {
         body: Body,
         requiresAuthentication: Bool = true
     ) throws(APIError) -> Endpoint<Response> {
+        Endpoint(
+            request: try postRequest(path, body: body, requiresAuthentication: requiresAuthentication),
+            decoder: WalletJSON.decoder
+        )
+    }
+
+    private static func postRequest<Body: Encodable>(
+        _ path: String,
+        body: Body,
+        requiresAuthentication: Bool
+    ) throws(APIError) -> HTTPRequest {
         let data: Data
         do {
             data = try WalletJSON.encoder().encode(body)
@@ -79,15 +101,12 @@ enum WalletEndpoints {
         }
         var headers = jsonHeaders
         headers[HTTPHeader.contentType] = "application/json"
-        return Endpoint(
-            request: HTTPRequest(
-                method: .post,
-                path: path,
-                headers: headers,
-                body: data,
-                requiresAuthentication: requiresAuthentication
-            ),
-            decoder: WalletJSON.decoder
+        return HTTPRequest(
+            method: .post,
+            path: path,
+            headers: headers,
+            body: data,
+            requiresAuthentication: requiresAuthentication
         )
     }
 

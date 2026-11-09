@@ -32,8 +32,10 @@ extension APIError {
     /// `isOutcomeUnknown`, which this deliberately throws away.
     var dataSourceError: DataSourceError {
         switch self {
-        case .transport:
+        case .transport where isOffline:
             .offline
+        case .transport:
+            .unavailable
         case .unauthorized:
             .sessionExpired
         case .cancelled:

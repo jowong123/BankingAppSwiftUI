@@ -23,24 +23,35 @@ struct RefreshRequestDTO: Encodable, Sendable, CustomStringConvertible, CustomRe
     }
 }
 
-/// Tokens from login and refresh. They go straight to the Keychain (Phase 5).
-/// The descriptions are redacted so an accidental log or crash report can't leak them.
-public struct SessionTokensDTO: Decodable, Hashable, Sendable, CustomStringConvertible, CustomDebugStringConvertible,
+struct LogoutRequestDTO: Encodable, Sendable, CustomStringConvertible, CustomReflectable {
+    let refreshToken: String
+
+    var description: String {
+        "LogoutRequestDTO(<redacted>)"
+    }
+    var customMirror: Mirror {
+        Mirror(self, children: [:])
+    }
+}
+
+/// Tokens from login and refresh. `RemoteAuthAPI` turns them into `SessionTokens`, which
+/// go straight to the Keychain. Redacted so an accidental log or crash report can't leak them.
+struct SessionTokensDTO: Decodable, Hashable, Sendable, CustomStringConvertible, CustomDebugStringConvertible,
     CustomReflectable
 {
-    public let accessToken: String
-    public let refreshToken: String
+    let accessToken: String
+    let refreshToken: String
     /// Access-token lifetime in seconds.
-    public let expiresIn: Int
+    let expiresIn: Int
 
-    public var description: String {
+    var description: String {
         "SessionTokensDTO(<redacted>)"
     }
-    public var debugDescription: String {
+    var debugDescription: String {
         description
     }
     /// Empty, so `dump`, debuggers and test-failure diffs can't print the tokens either.
-    public var customMirror: Mirror {
+    var customMirror: Mirror {
         Mirror(self, children: [:])
     }
 }

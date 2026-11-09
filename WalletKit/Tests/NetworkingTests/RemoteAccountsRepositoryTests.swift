@@ -57,6 +57,11 @@ import Testing
     /// Features act on these four outcomes; the HTTP detail stays in Networking.
     @Test(arguments: [
         (APIError.transport(.timedOut), DataSourceError.offline),
+        (.transport(.dataNotAllowed), .offline),
+        // Refused, no such host, TLS: the server can't be reached, the connection is fine.
+        (.transport(.cannotConnectToHost), .unavailable),
+        (.transport(.cannotFindHost), .unavailable),
+        (.transport(.serverCertificateUntrusted), .unavailable),
         (.unauthorized, .sessionExpired),
         (.cancelled, .cancelled),
         (.http(status: 503), .unavailable),

@@ -86,17 +86,6 @@ let transferJSON = """
         #expect(sent["targetCurrency"] as? String == "USD")
     }
 
-    @Test func loginSendsNoBearerToken() async throws {
-        let transport = StubTransport([status(200, #"{"accessToken":"a","refreshToken":"r","expiresIn":900}"#)])
-        let api = try makeAPI(transport)
-
-        _ = try await api.login(email: "demo@wallet.test", password: "pw")
-
-        let request = try #require(await transport.requests.first)
-        #expect(request.value(forHTTPHeaderField: "Authorization") == nil)
-        #expect(request.httpMethod == "POST")
-    }
-
     @Test func accountsSendBearerAndDecode() async throws {
         let body = """
             {"accounts":[{"id":"acc_jpy","currency":"JPY",
@@ -202,18 +191,6 @@ let transferJSON = """
         #expect(error.isDefiniteRejection == !unknown)
     }
 
-    @Test func refreshIsNeverRetried() async throws {
-        let transport = StubTransport([
-            .failure(.transport(.timedOut)), status(200, #"{"accessToken":"a","refreshToken":"r","expiresIn":900}"#),
-        ])
-        let api = try makeAPI(transport)
-
-        await #expect(throws: APIError.transport(.timedOut)) {
-            try await api.refresh(refreshToken: "r")
-        }
-        #expect(await transport.requests.count == 1)
-    }
-
     @Test func quoteForADifferentAmountIsRejected() async throws {
         let quoteJSON = """
             {"id":"q_1","sourceAmount":{"amountMinor":99999,"currency":"SGD"},
@@ -262,6 +239,15 @@ let transferJSON = """
         (.unauthorized, .unauthorized),
     ])
     func refreshFailuresKeepTheirMeaningForTheAuthInterceptor(error: APIError, expected: HTTPError) {
+        #expect(WalletAPI.refreshFailure(error) as? HTTPError == expected)
+    }
+
+    /// A refresh that failed for network reasons reaches the screen as "offline", not "unexpected".
+    @Test(arguments: [
+        (AuthError.offline, HTTPError.transport(.notConnectedToInternet)),
+        (.unavailable, .status(code: 503, body: Data())),
+    ])
+    func temporaryRefreshFailuresBecomeHTTPErrors(error: AuthError, expected: HTTPError) {
         #expect(WalletAPI.refreshFailure(error) as? HTTPError == expected)
     }
 }

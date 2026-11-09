@@ -89,3 +89,22 @@ extension APIError {
         }
     }
 }
+
+extension APIError {
+    /// Failures the user can fix on their side: no signal, Wi-Fi off, flight mode, mobile
+    /// data blocked, or a connection too weak to finish in time. Any other transport failure
+    /// (refused connection, unknown host, TLS) means the server can't be reached, and the
+    /// user's connection is fine; telling them to check it would send them the wrong way.
+    static let offlineCodes: Set<URLError.Code> = [
+        .notConnectedToInternet, .networkConnectionLost, .dataNotAllowed, .internationalRoamingOff,
+        .callIsActive, .timedOut,
+    ]
+
+    /// `true` for a transport failure caused by the device's own connection.
+    var isOffline: Bool {
+        guard case .transport(let code) = self else {
+            return false
+        }
+        return Self.offlineCodes.contains(code)
+    }
+}
