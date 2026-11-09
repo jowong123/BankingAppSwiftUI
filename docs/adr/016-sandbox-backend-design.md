@@ -26,6 +26,7 @@ The Vapor backend in `backend/` is a sandbox with fake money, but it's what the 
 - **Grace window:** a rotated token presented again within 30 s is treated as a retry rather than reuse, provided the pair it was rotated into has never been refreshed. The client never got that response. The unused pair is revoked and a new pair issued. If a thief wins the race, the real user's next refresh uses the revoked pair, which counts as reuse and revokes everything.
 - The client also never retries a refresh (`allowsRetry = false`, ADR-012).
 - Login verifies bcrypt on the thread pool, against a dummy hash for unknown emails, so response time doesn't reveal which accounts exist.
+- **Logout** (`POST /v1/auth/logout`, added in Phase 5) revokes the pair of the presented refresh token, then follows `replacedBy` so a pair from a lost refresh response dies too. Other sessions of the user stay signed in. It always answers 204, so it can't be used to test tokens, and needs no access token. The app calls it best-effort after wiping the device (sign-out, five wrong PINs, a session left by an earlier install).
 
 **Idempotency.** There are two layers.
 1. *Middleware* (quotes optional, transfers required).
@@ -75,5 +76,6 @@ The Vapor backend in `backend/` is a sandbox with fake money, but it's what the 
   - No login rate limiting.
   - Creating a transfer checks the balance but doesn't reserve funds; Phase 7 confirm must re-check and debit atomically.
   - The idempotency store is per-process SQLite.
+  - Logout is best-effort: if the app is offline when the user signs out, the server isn't told, and a copied token stays valid until it expires (15 minutes access, 30 days refresh). The device has forgotten it either way.
 - **Revisit when:**
   - A real deployment is needed: rate limiting, a shared store (Postgres) for idempotency and tokens, and funds reservation.

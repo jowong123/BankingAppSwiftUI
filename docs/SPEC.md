@@ -120,12 +120,13 @@ Enforced by `Package.swift` target dependencies, so a forbidden import fails to 
 - Each feature defines a `Route` enum (`Hashable`) and a `Router` with `push`, `pop`, `popToRoot`, `present`, `dismiss`.
 - Each feature exposes one public entry view, e.g. `TransferFlowView(router:dependencies:onFinish:)`.
 - Cross-feature navigation is an output closure (e.g. Accounts calls `onSendMoney(accountID)`); `AppCoordinator` decides.
+- The top-level flow (sign in, create PIN, unlock, accounts) is swapped by `AppCoordinator` from the `SessionState`, never pushed, so there is no "back" past the lock screen (ADR-020).
 - Deep links (`wallet://transfer?to=...`) are parsed in `Navigation` into an `AppRoute`, handled by `AppCoordinator`.
 - Sensitive flows re-authenticate before the route is pushed.
 
 **Dependency injection**
 - Each feature declares a `Dependencies` struct of protocols.
-- `AppEnvironment` builds concrete implementations once and passes them down through initialisers.
+- `AppEnvironment` builds concrete implementations once and passes them down through initialisers (ADR-005). It reads the backend URL from `WalletAPIBaseURL` in the build's Info.plist (ADR-021).
 - Previews and tests pass mocks. No singletons, no service locator.
 
 **Concurrency**
@@ -134,8 +135,8 @@ Enforced by `Package.swift` target dependencies, so a forbidden import fails to 
 - Domain models are `Sendable` value types. Leaving a screen cancels its `.task {}` work.
 
 **App lifecycle**
-- Background → blur overlay over the window (no balances in the app switcher).
-- Inactive 5 minutes, or 2 minutes in background → session locks, requires Face ID or PIN.
+- Background → opaque privacy cover over the window (no balances in the app switcher). A blur can still show the shape of large numbers. The cover stays up on return until the lock decision is made.
+- Inactive 5 minutes, or 2 minutes in background → session locks, requires Face ID or PIN. Measured with a monotonic clock (`ContinuousClock`), so changing the device's time can't stop it. An unfinished PIN setup times out to signed out instead.
 - Launch → integrity signal, restore session, resume pending transfers from the outbox.
 
 ## 5. Domain model
@@ -198,7 +199,7 @@ stateDiagram-v2
 Biometric enrolment change invalidates the key (`.biometryCurrentSet`); the user must re-bind. Explain this in the UI.
 
 **Storage**
-- Keychain (`kSecAttrAccessibleWhenUnlockedThisDeviceOnly`): access token, refresh token, device ID.
+- Keychain (`kSecAttrAccessibleWhenUnlockedThisDeviceOnly`): access token, refresh token, device ID, and the app PIN's salted PBKDF2 hash with its attempts left (ADR-019).
 - Secure Enclave: signing private key, never exported.
 - SwiftData: `.complete` file protection; the transfer outbox only. Balances and transactions are never stored on the device (ADR-017).
 - Never: UserDefaults for sensitive data, secrets in source, PII in logs.
@@ -206,7 +207,7 @@ Biometric enrolment change invalidates the key (`.biometryCurrentSet`); the user
 **Network**
 - TLS public-key pinning (SPKI hash) with a backup pin (ADR-006).
 - `Idempotency-Key` on every mutating call; request ID on every call.
-- 401 → one token refresh, then lock the session.
+- 401 → one token refresh. If the server refuses the refresh token, the session is signed out and wiped (not just locked): the tokens are no longer valid.
 
 **Integrity**
 - App Attest assertions on device binding and transfer confirm.
@@ -224,7 +225,9 @@ Biometric enrolment change invalidates the key (`.biometryCurrentSet`); the user
 | Tampered app | Repackaged binary calling the API | App Attest on binding and confirm |
 | Remote-access / overlay scam | Scammer guides a victim | Screen-recording detection, cooling-off for new payees, warning copy |
 | Data leak | Account number in a crash report | OSLog `.private`, Sentry scrubbing, `print` banned |
-| Biometric change | Attacker adds a fingerprint | Key invalidated; re-binding required |
+| Biometric change | Attacker adds a fingerprint | App unlock: Face ID refused until the PIN is entered (ADR-019). Signing key invalidated; re-binding required |
+| Token resurrection | A refresh finishing after sign-out restores the old session | Session generation counter drops late results (`SessionStore`) |
+| Copied token after sign-out | Token lifted from a backup or proxy log is used later | Sign-out, five wrong PINs and a reinstall revoke the session on the server (`POST /v1/auth/logout`, best effort) |
 
 ## 7. Backend API (Vapor)
 
@@ -234,6 +237,7 @@ Small Vapor service in `backend/`, Fluent SQLite, seeded fake accounts, simulate
 | --- | --- | --- | --- |
 | POST | `/v1/auth/login` | Sandbox login | Binding token or session tokens |
 | POST | `/v1/auth/refresh` | Refresh access token | Rotates refresh token |
+| POST | `/v1/auth/logout` | Sign out | Revokes the session's tokens; always 204 |
 | POST | `/v1/devices` | Bind device | Public key + attestation |
 | GET | `/v1/accounts` | Balances per currency | Minor units |
 | GET | `/v1/accounts/{id}/transactions` | History | Cursor pagination |
@@ -293,6 +297,10 @@ Template: `docs/adr/000-template.md`.
 | 015 | OSLog + Sentry with scrubbing | Firebase Crashlytics |
 | 016 | Sandbox backend: SQLKit rows, hashed rotating tokens with grace window, two-layer idempotency | Fluent models with `@unchecked Sendable`; JWT; middleware-only idempotency |
 | 017 | No offline cache of account data; Accounts is online only | SwiftData cache of balances (and recent history) |
+| 018 | Debug-only ATS exception (`NSAllowsLocalNetworking`) for the local sandbox backend | Local HTTPS with a self-signed certificate; exception in all builds |
+| 019 | App PIN checked on device: PBKDF2 hash in Keychain, 5 attempts then wipe | Device passcode fallback; server-verified PIN |
+| 020 | App root swapped from `SessionState` by `AppCoordinator` | One navigation stack; lock screen as a full-screen cover |
+| 021 | Backend URL per build configuration in Info.plist | Swift constant behind `#if DEBUG`; xcconfig variable |
 
 ## 10. Build plan (10 weeks)
 
@@ -317,13 +325,14 @@ Run each phase with `/phase <n>`. Review every diff before committing.
 ### Phase 5 (week 5): Auth + session
 - Task: AuthFeature and `KeychainStore`: sandbox login, Face ID with PIN fallback, token refresh, inactivity auto-lock, background blur.
 - Done when: tokens only in Keychain; app locks after timeout; app switcher shows no balances.
-- Carried over from Phase 4: in `AppEnvironment`, replace `SandboxAccountsRepository` (Debug) and `UnconnectedAccountsRepository` (Release) with `RemoteAccountsRepository(api:)` once the session store supplies tokens, and delete both. Route `AccountsFlowView`'s `onSessionExpired` to sign-in in `AppCoordinator` (it is a no-op now). Decide how the simulator reaches the local http backend (an ATS exception for local networking in Debug only, or HTTPS locally): that is a security-control decision. A 403 or 404 on a read currently maps to `invalidData` with Retry; revisit once real auth errors exist.
+- Decisions: ADR-018 (Debug-only local networking), ADR-019 (app PIN). UI tests run on the in-app mock (`-uiTesting -mockServer`); `EndToEndUITests` runs against the real backend when credentials are passed in the environment. Sign-out wipes the PIN with the tokens; tokens without a PIN at launch are wiped. Every wipe also asks the server to revoke the tokens (`POST /v1/auth/logout`), without waiting for it. "Offline" is shown only when the device has no connection; a server that can't be reached says so. Auth errors are `UserFacingError`, like every other feature.
 
 ### Phase 6 (week 6): Transfer flow + outbox
 - Task: TransferFeature: recipient → amount → live quote with fee breakdown and 30 s countdown → review → confirm → result. `TransferOutbox` actor resuming on launch.
 - Done when: double-tap Send creates one transfer; expiry re-quotes visibly; killing the app mid-transfer resumes on relaunch.
 - Carried over from the Phase 3 review: `APIError.isDefiniteRejection` judges one request, not the transfer. The outbox needs its own rule after an unknown outcome. A 404 when polling `GET /v1/transfers/{id}` can mean the create is still in flight, so resend the create with the same ID (safe, it is idempotent on the ID). `idempotency_mismatch` or `transfer_exists` on create means a transfer with this ID exists, so fetch it. Neither is "failed".
 - Carried over from Phase 4: write ADR-009 (SwiftData with `.complete` protection) with the outbox; Persistence is still a placeholder until then. `TransferDTO`, `MoneyDTO` and the transfer methods of `WalletAPI` still expose wire types: map them to a Domain `Transfer` and make them internal.
+- Carried over from Phase 5: the outbox learns about a refused refresh only through the calls it makes. Add a session state stream (`SessionManaging.stateUpdates`) so `AppCoordinator` reacts to a session ending in the background. Build transfer calls on the one shared `WalletAPI` in `AppEnvironment`.
 
 ### Phase 7 (week 7): Secure Enclave signing + App Attest
 - Task: Device binding and transaction signing per section 6 on iOS and backend. Public-key pinning with backup pin.

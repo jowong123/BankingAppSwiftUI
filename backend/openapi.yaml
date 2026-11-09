@@ -78,6 +78,25 @@ paths:
               schema: { $ref: "#/components/schemas/SessionTokens" }
         "401": { $ref: "#/components/responses/Error" }
 
+  /v1/auth/logout:
+    post:
+      summary: Sign out
+      description: |
+        Revokes the access and refresh token issued with this refresh token, and any pair it
+        was rotated into. Other sessions of the same user stay signed in. Always 204, for an
+        unknown or already revoked token too, so it can't be used to test tokens and a retry
+        is harmless. Needs no access token, so it works after the access token has expired.
+      security: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/LogoutRequest" }
+      responses:
+        "204":
+          description: Signed out
+        "400": { $ref: "#/components/responses/Error" }
+
   /v1/accounts:
     get:
       summary: Balances per currency
@@ -295,6 +314,12 @@ components:
         password: { type: string, format: password }
 
     RefreshRequest:
+      type: object
+      required: [refreshToken]
+      properties:
+        refreshToken: { type: string }
+
+    LogoutRequest:
       type: object
       required: [refreshToken]
       properties:
