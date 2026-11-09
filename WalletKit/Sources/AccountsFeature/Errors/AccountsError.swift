@@ -9,7 +9,13 @@ enum AccountsError {
         case .offline:
             UserFacingError(
                 title: AccountsStrings.offlineTitle, message: AccountsStrings.offlineMessage, canRetry: true)
-        case .unavailable, .invalidData:
+        case .unavailable:
+            UserFacingError(
+                title: AccountsStrings.unavailableTitle,
+                message: AccountsStrings.unavailableMessage,
+                canRetry: true
+            )
+        case .invalidData:
             UserFacingError(title: AccountsStrings.failedTitle, message: AccountsStrings.failedMessage, canRetry: true)
         case .sessionExpired:
             UserFacingError(

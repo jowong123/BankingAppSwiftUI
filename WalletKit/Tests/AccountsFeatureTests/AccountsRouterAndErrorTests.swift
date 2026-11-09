@@ -48,6 +48,15 @@ import Testing
         #expect(shown.canRetry == canRetry)
     }
 
+    /// "Check your connection" only when it's the connection; a down server says so.
+    @Test func offlineUnreachableAndBadDataReadDifferently() throws {
+        let offline = try #require(AccountsError.userFacing(.offline))
+        let unavailable = try #require(AccountsError.userFacing(.unavailable))
+        let invalidData = try #require(AccountsError.userFacing(.invalidData))
+
+        #expect(Set([offline.title, unavailable.title, invalidData.title]).count == 3)
+    }
+
     @Test func cancellationIsNotShown() {
         #expect(AccountsError.userFacing(.cancelled) == nil)
     }

@@ -27,6 +27,12 @@ enum AccountsStrings {
     static var offlineMessage: String {
         text("accounts.error.offline.message")
     }
+    static var unavailableTitle: String {
+        text("accounts.error.unavailable.title")
+    }
+    static var unavailableMessage: String {
+        text("accounts.error.unavailable.message")
+    }
     static var failedTitle: String {
         text("accounts.error.failed.title")
     }

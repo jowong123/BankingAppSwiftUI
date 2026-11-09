@@ -20,7 +20,7 @@ import Testing
         let url = try #require(Bundle.module.url(forResource: "Localizable", withExtension: "strings"))
         let table = try #require(NSDictionary(contentsOf: url) as? [String: String])
 
-        #expect(usedKeys.count == 12)
+        #expect(usedKeys.count == 14)
         for key in usedKeys {
             #expect(table[key] != nil, "\(key) is missing from Localizable.strings")
         }
@@ -30,6 +30,7 @@ import Testing
     @Test func stringsResolveToTheirEnglishText() {
         #expect(AccountsStrings.title == "Accounts")
         #expect(AccountsStrings.offlineTitle == "You're offline")
+        #expect(AccountsStrings.unavailableTitle == "Can't reach Wallet")
         #expect(AccountsStrings.couldNotUpdate == "Couldn't update. Pull down to try again.")
     }
 }

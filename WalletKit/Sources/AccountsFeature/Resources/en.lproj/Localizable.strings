@@ -23,7 +23,11 @@
 "accounts.error.offline.title" = "You're offline";
 "accounts.error.offline.message" = "Check your connection and try again.";
 
-/* Error title and message for a server failure. */
+/* Error title and message when the server can't be reached or is busy. */
+"accounts.error.unavailable.title" = "Can't reach Wallet";
+"accounts.error.unavailable.message" = "Please try again in a moment.";
+
+/* Error title and message when the server sent something the app can't read. */
 "accounts.error.failed.title" = "Something went wrong";
 "accounts.error.failed.message" = "Please try again in a moment.";
 
