@@ -1,0 +1,48 @@
+/* Every user-visible string in AuthFeature. English only (SPEC section 2).
+   Read through `AuthStrings`; add new text here and a property there. */
+
+/* Sign in */
+"auth.signIn.title" = "Sign in";
+"auth.signIn.email" = "Email";
+"auth.signIn.password" = "Password";
+"auth.signIn.submit" = "Sign in";
+"auth.signIn.sessionExpired" = "Your session ended. Sign in again to continue.";
+
+/* Create PIN */
+"auth.createPIN.title" = "Create a PIN";
+"auth.createPIN.enter" = "Choose a 6-digit PIN. You'll use it when Face ID isn't available.";
+"auth.createPIN.confirm" = "Enter the same PIN again.";
+
+/* Unlock */
+"auth.unlock.title" = "Unlock Wallet";
+"auth.unlock.prompt" = "Enter your PIN";
+"auth.unlock.useFaceID" = "Use Face ID";
+"auth.unlock.biometricReason" = "Unlock Wallet";
+"auth.unlock.signOut" = "Sign out";
+"auth.unlock.tooManyAttempts.title" = "Too many wrong PINs";
+"auth.unlock.tooManyAttempts.message" = "For your security you've been signed out. Sign in again to continue.";
+"auth.ok" = "OK";
+
+/* Errors: a short title, then a message saying what to do (UserFacingError). */
+"auth.error.invalidCredentials.title" = "Couldn't sign in";
+"auth.error.invalidCredentials.message" = "Email or password is incorrect.";
+"auth.error.offline.title" = "You're offline";
+"auth.error.offline.message" = "Check your connection and try again.";
+"auth.error.unavailable.title" = "Can't reach Wallet";
+"auth.error.unavailable.message" = "Please try again in a moment.";
+"auth.error.sessionExpired.title" = "Session expired";
+"auth.error.sessionExpired.message" = "Sign in again to continue.";
+"auth.error.storage.title" = "Secure storage is locked";
+"auth.error.storage.message" = "Unlock your phone and try again.";
+"auth.error.invalidPIN.title" = "Check your PIN";
+"auth.error.invalidPIN.message" = "Your PIN must be 6 digits.";
+"auth.error.pinMismatch.title" = "The PINs didn't match";
+"auth.error.pinMismatch.message" = "Choose your PIN again.";
+"auth.error.wrongPIN.title" = "Wrong PIN";
+"auth.error.wrongPIN.one" = "1 attempt left before you're signed out.";
+"auth.error.wrongPIN.other" = "%d attempts left.";
+"auth.error.biometryFailed.title" = "Face ID didn't recognise you";
+"auth.error.biometryUnavailable.title" = "Face ID isn't available";
+"auth.error.biometry.message" = "Enter your PIN.";
+"auth.error.biometryChanged.title" = "Face ID settings changed";
+"auth.error.biometryChanged.message" = "Enter your PIN to turn Face ID back on.";

@@ -60,7 +60,7 @@ let targets: [Target] = [
     .target(name: Module.identitySDK),
 
     // Features: Core only, never another feature.
-    .target(name: Module.authFeature, dependencies: featureCore),
+    .target(name: Module.authFeature, dependencies: featureCore, resources: [.process("Resources")]),
     .target(
         name: Module.onboardingFeature, dependencies: featureCore + [.target(name: Module.identitySDK)]),
     .target(name: Module.accountsFeature, dependencies: featureCore, resources: [.process("Resources")]),
