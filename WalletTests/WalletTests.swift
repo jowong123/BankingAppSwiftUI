@@ -1,5 +1,6 @@
 import AccountsFeature
 import Domain
+import Foundation
 import Testing
 
 @testable import Wallet
@@ -7,22 +8,42 @@ import Testing
 @MainActor
 struct AppEnvironmentTests {
     @Test func liveEnvironmentLinksEveryAppFacingModule() {
-        let environment = AppEnvironment.live(arguments: [])
+        let environment = AppEnvironment.live(arguments: ["-mockServer"])
 
         #expect(Set(environment.linkedModules).count == 11)
     }
 
-    @Test func simulateOfflineArgumentMakesAccountsFailOffline() async {
-        let environment = AppEnvironment.live(arguments: ["-uiTesting", "-simulateOffline"])
+    @Test func simulateOfflineArgumentMakesMockAccountsFailOffline() async {
+        let environment = AppEnvironment.live(arguments: ["-mockServer", "-uiTesting", "-simulateOffline"])
 
         await #expect(throws: DataSourceError.offline) {
             try await environment.accounts.repository.accounts()
         }
     }
+
+    @Test(arguments: [
+        ("http://127.0.0.1:8080", true), ("https://api.wallet.invalid", true), ("not a url", false), ("", false),
+    ])
+    func baseURLComesFromInfoPlist(value: String, valid: Bool) {
+        #expect((AppEnvironment.baseURL(from: ["WalletAPIBaseURL": value]) != nil) == valid)
+        #expect(AppEnvironment.baseURL(from: nil) == nil)
+    }
+
+    /// The Debug build talks to the local backend; the exception for plain http is Debug only (ADR-018).
+    @Test func debugBuildPointsAtTheLocalBackend() {
+        #expect(AppEnvironment.baseURL(from: Bundle.main.infoDictionary)?.absoluteString == "http://127.0.0.1:8080")
+        let ats = Bundle.main.infoDictionary?["NSAppTransportSecurity"] as? [String: Any]
+        #expect(ats?["NSAllowsLocalNetworking"] as? Bool == true)
+        #expect(ats?["NSAllowsArbitraryLoads"] == nil)
+    }
+
+    @Test func faceIDUsageDescriptionIsSet() {
+        #expect((Bundle.main.infoDictionary?["NSFaceIDUsageDescription"] as? String)?.isEmpty == false)
+    }
 }
 
-struct SandboxAccountsRepositoryTests {
-    let repository = SandboxAccountsRepository(isOffline: false, delay: .zero)
+struct MockAccountsRepositoryTests {
+    let repository = MockAccountsRepository(isOffline: false, delay: .zero)
 
     @Test func hasTheBackendSeedBalances() async throws {
         let accounts = try await repository.accounts()

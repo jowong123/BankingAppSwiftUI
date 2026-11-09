@@ -1,0 +1,10 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<plist version="1.0">
+<dict>
+	<!-- No deployed backend yet (Phase 9). `.invalid` can never resolve, so a Release
+	     build fails closed instead of talking to an unknown host. -->
+	<key>WalletAPIBaseURL</key>
+	<string>https://api.wallet.invalid</string>
+</dict>
+</plist>

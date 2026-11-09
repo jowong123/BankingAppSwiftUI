@@ -2,12 +2,10 @@
     import Domain
     import Foundation
 
-    /// In-memory accounts with the same data as the backend seed (`backend/.../SeedData.swift`).
-    ///
-    /// Phase 4 runs on fake data: there is no session to call the real API until Phase 5,
-    /// which replaces this with `RemoteAccountsRepository`. Fake money only, nothing stored.
-    /// Launch with `-simulateOffline` to see the offline state.
-    struct SandboxAccountsRepository: AccountsRepository {
+    /// In-memory accounts with the same data as the backend seed (`backend/.../SeedData.swift`),
+    /// for UI tests and previews of the whole app (`-mockServer`, SPEC section 8). Debug only.
+    /// Add `-simulateOffline` to see the offline state.
+    struct MockAccountsRepository: AccountsRepository {
         static let pageSize = 20
 
         let isOffline: Bool

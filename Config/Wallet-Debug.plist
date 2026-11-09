@@ -1,0 +1,16 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<plist version="1.0">
+<dict>
+	<!-- The sandbox backend on this Mac (`swift run WalletBackend serve` in backend/). -->
+	<key>WalletAPIBaseURL</key>
+	<string>http://127.0.0.1:8080</string>
+	<!-- Debug only (ADR-018): plain http to local addresses, for the sandbox backend.
+	     Release has no exception; every other host still needs HTTPS. -->
+	<key>NSAppTransportSecurity</key>
+	<dict>
+		<key>NSAllowsLocalNetworking</key>
+		<true/>
+	</dict>
+</dict>
+</plist>

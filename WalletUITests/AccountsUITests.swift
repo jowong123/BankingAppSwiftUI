@@ -8,17 +8,9 @@ final class AccountsUITests: XCTestCase {
     }
 
     @MainActor
-    private func launch(_ extraArguments: [String] = []) -> XCUIApplication {
-        let app = XCUIApplication()
-        // English, so the assertions on spoken labels don't depend on the simulator's language.
-        app.launchArguments = ["-uiTesting", "-AppleLanguages", "(en)", "-AppleLocale", "en_US"] + extraArguments
-        app.launch()
-        return app
-    }
-
-    @MainActor
     func testBalancesShowAndVoiceOverReadsTheCurrency() throws {
-        let app = launch()
+        let app = launchApp()
+        signIn(app)
 
         let sgd = app.buttons["accounts.card.acc_sgd"]
         XCTAssertTrue(sgd.waitForExistence(timeout: 10))
@@ -38,7 +30,8 @@ final class AccountsUITests: XCTestCase {
 
     @MainActor
     func testHistoryLoadsTheNextPageWhenScrolledToTheEnd() throws {
-        let app = launch()
+        let app = launchApp()
+        signIn(app)
         let sgd = app.buttons["accounts.card.acc_sgd"]
         XCTAssertTrue(sgd.waitForExistence(timeout: 10))
 
@@ -55,7 +48,8 @@ final class AccountsUITests: XCTestCase {
 
     @MainActor
     func testOfflineShowsTheErrorAndNoBalances() throws {
-        let app = launch(["-simulateOffline"])
+        let app = launchApp(["-simulateOffline"])
+        signIn(app)
 
         XCTAssertTrue(app.buttons["accounts.retry"].waitForExistence(timeout: 10))
         XCTAssertTrue(app.staticTexts["You're offline"].exists)
