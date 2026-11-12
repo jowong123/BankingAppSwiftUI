@@ -19,7 +19,17 @@ public actor SessionStore: SessionManaging, SessionTokenProvider {
     private let store: any SecureStore
     private let biometrics: any BiometricAuthenticator
     private let hasher: PINHasher
-    private var state: SessionState = .signedOut
+    private var state: SessionState = .signedOut {
+        didSet {
+            if state != oldValue {
+                for listener in listeners.values {
+                    listener.yield(state)
+                }
+            }
+        }
+    }
+    /// Everyone following `stateUpdates()`.
+    private var listeners: [UUID: AsyncStream<SessionState>.Continuation] = [:]
     private var tokens: SessionTokens?
     /// Bumped by every wipe and login.
     private var generation = 0
@@ -313,6 +323,32 @@ public actor SessionStore: SessionManaging, SessionTokenProvider {
                 try? await api.logout(refreshToken: refreshToken)
             }
         }
+    }
+}
+
+// MARK: - State updates
+
+extension SessionStore {
+    /// Only the newest state is buffered: a listener that falls behind needs where the
+    /// session is now, not every step on the way.
+    public func stateUpdates() async -> AsyncStream<SessionState> {
+        let (stream, continuation) = AsyncStream.makeStream(
+            of: SessionState.self,
+            bufferingPolicy: .bufferingNewest(1)
+        )
+        let id = UUID()
+        listeners[id] = continuation
+        continuation.yield(state)
+        continuation.onTermination = { [weak self] _ in
+            Task {
+                await self?.removeListener(id)
+            }
+        }
+        return stream
+    }
+
+    private func removeListener(_ id: UUID) {
+        listeners[id] = nil
     }
 }
 

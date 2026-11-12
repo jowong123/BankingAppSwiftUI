@@ -3,19 +3,19 @@ import Testing
 @testable import Domain
 
 @Suite struct TransferStateMachineTests {
-    /// The 9 arrows in the docs/SPEC.md section 5 diagram, written out independently of
+    /// The 10 arrows in the docs/SPEC.md section 5 diagram, written out independently of
     /// the implementation so a typo in either one fails the test.
     static let validTransitions: [TransferState: [TransferEvent: TransferState]] = [
         .draft: [.quoteReceived: .quoted],
         .quoted: [.quoteExpired: .expired, .authorised: .authorised],
         .expired: [.quoteReceived: .quoted],
-        .authorised: [.confirmSent: .submitted],
+        .authorised: [.confirmSent: .submitted, .rejected: .failed],
         .submitted: [.serverAccepted: .processing, .rejected: .failed],
         .processing: [.settled: .completed, .declined: .failed],
     ]
 
-    @Test func tableHasNineTransitions() {
-        #expect(Self.validTransitions.values.map(\.count).reduce(0, +) == 9)
+    @Test func tableHasTenTransitions() {
+        #expect(Self.validTransitions.values.map(\.count).reduce(0, +) == 10)
     }
 
     /// Every one of the 8 × 8 = 64 (state, event) pairs: valid ones move to the
@@ -58,14 +58,19 @@ import Testing
         }
     }
 
-    @Test func cannotFailBeforeSubmitting() {
-        // Before the confirm request is sent, nothing has reached the server to reject.
-        for state in [TransferState.draft, .quoted, .expired, .authorised] {
+    @Test func cannotFailBeforeReachingTheServer() {
+        // Before Send, nothing has reached the server to reject.
+        for state in [TransferState.draft, .quoted, .expired] {
             for event in [TransferEvent.rejected, .declined] {
                 #expect(throws: TransferTransitionError.self) {
                     try TransferStateMachine.next(state, event)
                 }
             }
+        }
+        // Authorised sends the create, which the server can refuse (quote expired, not
+        // enough money). Only an accepted transfer can be declined at settlement.
+        #expect(throws: TransferTransitionError.self) {
+            try TransferStateMachine.next(.authorised, .declined)
         }
     }
 }

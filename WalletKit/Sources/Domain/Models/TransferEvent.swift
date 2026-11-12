@@ -10,7 +10,7 @@ public enum TransferEvent: String, CaseIterable, Hashable, Sendable {
     case confirmSent
     /// The server accepted the transfer; settlement is pending.
     case serverAccepted
-    /// The server rejected the confirm request.
+    /// The server refused to create or confirm the transfer. No money moved.
     case rejected
     /// Settlement finished.
     case settled

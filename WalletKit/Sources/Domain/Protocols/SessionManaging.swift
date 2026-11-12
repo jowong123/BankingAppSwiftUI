@@ -23,4 +23,8 @@ public protocol SessionManaging: Sendable {
 
     /// Wipes the tokens and the PIN.
     func signOut() async -> SessionState
+
+    /// The current state, then every change, including ones nobody asked for: a refused
+    /// token refresh in the background signs the user out (SPEC section 6).
+    func stateUpdates() async -> AsyncStream<SessionState>
 }

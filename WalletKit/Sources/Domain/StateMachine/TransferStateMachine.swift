@@ -8,19 +8,23 @@ public enum TransferStateMachine {
         _ state: TransferState,
         _ event: TransferEvent
     ) throws(TransferTransitionError) -> TransferState {
-        switch (state, event) {
-        case (.draft, .quoteReceived): .quoted
-        case (.quoted, .quoteExpired): .expired
-        case (.expired, .quoteReceived): .quoted
-        case (.quoted, .authorised): .authorised
-        case (.authorised, .confirmSent): .submitted
-        case (.submitted, .serverAccepted): .processing
-        case (.submitted, .rejected): .failed
-        case (.processing, .settled): .completed
-        case (.processing, .declined): .failed
-        default: throw .invalid(from: state, event: event)
+        guard let next = transitions[state]?[event] else {
+            throw .invalid(from: state, event: event)
         }
+        return next
     }
+
+    /// Every arrow in the docs/SPEC.md section 5 diagram. Anything not listed is invalid.
+    static let transitions: [TransferState: [TransferEvent: TransferState]] = [
+        .draft: [.quoteReceived: .quoted],
+        .quoted: [.quoteExpired: .expired, .authorised: .authorised],
+        .expired: [.quoteReceived: .quoted],
+        // `rejected` from Authorised: the server refused to create it (quote expired, not
+        // enough money), so there is nothing to confirm.
+        .authorised: [.confirmSent: .submitted, .rejected: .failed],
+        .submitted: [.serverAccepted: .processing, .rejected: .failed],
+        .processing: [.settled: .completed, .declined: .failed],
+    ]
 }
 
 public enum TransferTransitionError: Error, Equatable, Sendable {
