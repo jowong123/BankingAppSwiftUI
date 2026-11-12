@@ -13,7 +13,8 @@ info:
     - Every non-2xx response has the `Error` body. Every response carries `X-Request-ID`
       and `Cache-Control: no-store`.
     - `POST /v1/transfers` requires `Idempotency-Key`, equal to the transfer `id`;
-      `POST /v1/quotes` honours it if sent. The same key with the same body returns the
+      `POST /v1/quotes` honours it if sent. The same key with the same body (compared as
+      JSON, so key order doesn't matter) returns the
       original response with `Idempotent-Replayed: true`; with a different body, 422
       `idempotency_mismatch`; while the first request is still running, 409
       `idempotency_in_progress`. Records expire after 24 h; an unfinished claim can be taken
@@ -27,8 +28,9 @@ info:
       `network` processes the request and then drops the connection, so the client sees a
       timeout for work that happened.
 
-    Device binding (`/v1/devices`) and transaction signing
-    (`/v1/transfers/{id}/challenge`, `/confirm`) are added in Phase 7.
+    Device binding (`/v1/devices`) and transaction signing (`/v1/transfers/{id}/challenge`,
+    a signature on `/confirm`) are added in Phase 7. Until then `/confirm` is unsigned
+    (ADR-022).
 servers:
   - url: http://127.0.0.1:8080
     description: Local sandbox (`swift run WalletBackend serve`)
@@ -190,8 +192,7 @@ paths:
         so a late retry never gets `quote_expired`. The same `id` with different details is
         409 `transfer_exists`. An `id` that belongs to another user is 404 `not_found`, so
         the reply never confirms that it exists. The transfer starts as
-        `awaiting_confirmation`; the signed confirm arrives in Phase 7. Balances don't
-        change yet.
+        `awaiting_confirmation`; nothing is debited until `confirm`.
       parameters:
         - $ref: "#/components/parameters/IdempotencyKey"
       requestBody:
@@ -220,9 +221,37 @@ paths:
         "409": { $ref: "#/components/responses/Error" }
         "422": { $ref: "#/components/responses/Error" }
 
+  /v1/transfers/{transferId}/confirm:
+    post:
+      summary: Confirm a transfer (moves the money)
+      description: |
+        Debits the source account, adds the history row and sets `processing`, in one
+        transaction. Safe to repeat: only an `awaiting_confirmation` transfer changes, and any
+        other status is returned as it is, so no idempotency record is kept. If the balance no
+        longer covers the amount, the transfer becomes `failed` with `insufficient_funds` and
+        nothing is debited. Unsigned until Phase 7 adds the signature (ADR-022).
+      parameters:
+        - name: transferId
+          in: path
+          required: true
+          schema: { type: string, format: uuid }
+      responses:
+        "200":
+          description: Transfer after the confirm
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/Transfer" }
+        "401": { $ref: "#/components/responses/Error" }
+        "404": { $ref: "#/components/responses/Error" }
+        "422": { $ref: "#/components/responses/Error" }
+
   /v1/transfers/{transferId}:
     get:
       summary: Transfer status
+      description: |
+        Polled while pending. In the sandbox a `processing` transfer settles 3 s after its
+        confirm, when it is next read: `completed`, or for the payee `rcp_decline_eur`
+        `failed` with `declined` and the debit refunded.
       parameters:
         - name: transferId
           in: path

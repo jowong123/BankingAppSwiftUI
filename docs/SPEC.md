@@ -157,6 +157,7 @@ stateDiagram-v2
     Expired --> Quoted: re-quote
     Quoted --> Authorised: Face ID + sign
     Authorised --> Submitted: confirm sent
+    Authorised --> Failed: create refused
     Submitted --> Processing: server accepted
     Submitted --> Failed: rejected
     Processing --> Completed: settled
@@ -170,7 +171,7 @@ stateDiagram-v2
 | Draft | Recipient and amount chosen | Amount screen |
 | Quoted | Server returns an FX quote | Rate, fee, receive amount, 30 s countdown |
 | Expired | Quote lock passes before confirm | "Rate updated" and the new quote, never a silent change |
-| Authorised | Face ID passes and payload is signed | Brief "confirming" state |
+| Authorised | Send tapped and saved (Phase 7: Face ID passes and payload is signed); the create is sent | "Sending", safe to leave the app |
 | Submitted | Signed confirm request sent | Spinner; safe to leave the app |
 | Processing | Server accepted, settlement pending | "On its way" with estimated arrival |
 | Completed | Server reports settled | Success screen and receipt |
@@ -179,7 +180,8 @@ stateDiagram-v2
 **Rules**
 - Transitions are a pure function `next(state, event) -> State` in Domain, tested for every valid and invalid pair.
 - Every transition is written to the `TransferOutbox` actor (SwiftData-backed) before the network call.
-- On launch, the outbox resumes Submitted/Processing transfers by polling `GET /v1/transfers/{id}`. A timeout is never treated as Failed.
+- On launch, the outbox resumes every unfinished transfer: Authorised → create, Submitted → confirm, Processing → poll `GET /v1/transfers/{id}`. Every call is safe to repeat. A timeout is never treated as Failed; the outbox waits (2 s doubling to 30 s) and asks again (`TransferRecovery`, ADR-022).
+- The outbox is deleted when the session ends. Sign-out asks first if a transfer is still sending.
 
 ## 6. Security design
 
@@ -227,6 +229,8 @@ Biometric enrolment change invalidates the key (`.biometryCurrentSet`); the user
 | Data leak | Account number in a crash report | OSLog `.private`, Sentry scrubbing, `print` banned |
 | Biometric change | Attacker adds a fingerprint | App unlock: Face ID refused until the PIN is entered (ADR-019). Signing key invalidated; re-binding required |
 | Token resurrection | A refresh finishing after sign-out restores the old session | Session generation counter drops late results (`SessionStore`) |
+| Unsigned confirm (Phase 6 only) | A stolen access token confirms a transfer | Sandbox with fake money; Phase 7 makes the signed payload mandatory (ADR-022) |
+| Outbox read from a locked phone | Device seized while a transfer is pending | `.complete` file protection, excluded from backups, deleted at sign-out (ADR-009) |
 | Copied token after sign-out | Token lifted from a backup or proxy log is used later | Sign-out, five wrong PINs and a reinstall revoke the session on the server (`POST /v1/auth/logout`, best effort) |
 
 ## 7. Backend API (Vapor)
@@ -245,13 +249,13 @@ Small Vapor service in `backend/`, Fluent SQLite, seeded fake accounts, simulate
 | POST | `/v1/quotes` | FX quote | Rate, fee, receive amount, `expiresAt` (30 s) |
 | POST | `/v1/transfers` | Create from quote | Requires `Idempotency-Key` |
 | POST | `/v1/transfers/{id}/challenge` | Signing nonce | Single use, 60 s |
-| POST | `/v1/transfers/{id}/confirm` | Signed payload | Verifies signature + assertion |
-| GET | `/v1/transfers/{id}` | Status | Polled while pending |
+| POST | `/v1/transfers/{id}/confirm` | Moves the money | Unsigned until Phase 7 (ADR-022); then verifies signature + assertion. Safe to repeat. Fails `quote_expired` more than 2 min after the quote expired |
+| GET | `/v1/transfers/{id}` | Status | Polled while pending. Sandbox settles 3 s after confirm; `rcp_decline_eur` is declined and refunded |
 
 **Conventions**
 - Money: `{ "amountMinor": 125000, "currency": "SGD" }`. Never floats.
 - Errors: `{ "code": "quote_expired", "message": "...", "requestId": "..." }`.
-- Same `Idempotency-Key` returns the original response.
+- Same `Idempotency-Key` with the same body (compared as JSON, key order ignored) returns the original response.
 - Simulation headers: `X-Sim-Delay: <ms>`, `X-Sim-Fail: network|server|declined`. Off unless the server runs with `SIMULATION_HEADERS=on`.
 
 ## 8. Testing, CI/CD, observability
@@ -301,6 +305,7 @@ Template: `docs/adr/000-template.md`.
 | 019 | App PIN checked on device: PBKDF2 hash in Keychain, 5 attempts then wipe | Device passcode fallback; server-verified PIN |
 | 020 | App root swapped from `SessionState` by `AppCoordinator` | One navigation stack; lock screen as a full-screen cover |
 | 021 | Backend URL per build configuration in Info.plist | Swift constant behind `#if DEBUG`; xcconfig variable |
+| 022 | Unsigned confirm until Phase 7; outbox recovery rule | Stop at "created"; a stub signature |
 
 ## 10. Build plan (10 weeks)
 
@@ -333,10 +338,12 @@ Run each phase with `/phase <n>`. Review every diff before committing.
 - Carried over from the Phase 3 review: `APIError.isDefiniteRejection` judges one request, not the transfer. The outbox needs its own rule after an unknown outcome. A 404 when polling `GET /v1/transfers/{id}` can mean the create is still in flight, so resend the create with the same ID (safe, it is idempotent on the ID). `idempotency_mismatch` or `transfer_exists` on create means a transfer with this ID exists, so fetch it. Neither is "failed".
 - Carried over from Phase 4: write ADR-009 (SwiftData with `.complete` protection) with the outbox; Persistence is still a placeholder until then. `TransferDTO`, `MoneyDTO` and the transfer methods of `WalletAPI` still expose wire types: map them to a Domain `Transfer` and make them internal.
 - Carried over from Phase 5: the outbox learns about a refused refresh only through the calls it makes. Add a session state stream (`SessionManaging.stateUpdates`) so `AppCoordinator` reacts to a session ending in the background. Build transfer calls on the one shared `WalletAPI` in `AppEnvironment`.
+- Decisions: ADR-009 (SwiftData outbox, `.complete`), ADR-022 (unsigned confirm, recovery rule). Send is not re-authenticated yet: Phase 7's signing prompt (`.biometryCurrentSet`) becomes the re-auth. A pending transfer is deleted with the session, after a warning on sign-out. The transfer flow opens over Accounts as a full-screen cover; locking closes it, the outbox carries on. UI tests use an in-app mock bank (`-mockServer`) with `-quoteSeconds`, `-transferDelay` and `-keepMockSession`.
 
 ### Phase 7 (week 7): Secure Enclave signing + App Attest
 - Task: Device binding and transaction signing per section 6 on iOS and backend. Public-key pinning with backup pin.
 - Done when: backend rejects tampered amount, reused nonce, expired nonce; changing Face ID enrolment forces re-binding.
+- Carried over from Phase 6: make the signature mandatory on `/confirm` (ADR-022) and re-authenticate Send through the signing key's Face ID prompt. Write ADR-011 (state machine + outbox) if it should be separate from ADR-009 and ADR-022.
 - Carried over from the Phase 3 review: the client checks that a quote matches what was asked, but trusts the server's maths (`target = round((source − fee) × rate)`, fee below source, expiry in the future). Decide whether the signed quote covers this or the client re-checks it. A pinning failure must not be reported as a user cancel: `URLSessionTransport` currently maps every `URLError.cancelled` to `CancellationError`.
 
 ### Phase 8 (week 8): IdentitySDK
