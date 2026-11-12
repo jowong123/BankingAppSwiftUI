@@ -48,8 +48,8 @@ struct TransferCreateDTO: Encodable, Sendable {
     let sourceAccountId: String
 }
 
-public struct TransferDTO: Decodable, Hashable, Sendable {
-    public enum Status: String, Decodable, Hashable, Sendable {
+struct TransferDTO: Decodable, Hashable, Sendable {
+    enum Status: String, Decodable, Hashable, Sendable {
         /// Created; waiting for the signed confirm (Phase 7).
         case awaitingConfirmation = "awaiting_confirmation"
         case processing
@@ -58,22 +58,40 @@ public struct TransferDTO: Decodable, Hashable, Sendable {
         /// A status this app version doesn't know. Treated as still in progress.
         case unknown
 
-        public init(from decoder: any Decoder) throws {
+        init(from decoder: any Decoder) throws {
             let raw = try decoder.singleValueContainer().decode(String.self)
             self = Status(rawValue: raw) ?? .unknown
         }
     }
 
-    public let id: String
-    public let quoteId: String
-    public let recipientId: String
-    public let sourceAccountId: String
-    public let sourceAmount: MoneyDTO
-    public let targetAmount: MoneyDTO
-    public let fee: MoneyDTO
-    public let status: Status
+    let id: String
+    let quoteId: String
+    let recipientId: String
+    let sourceAccountId: String
+    let sourceAmount: MoneyDTO
+    let targetAmount: MoneyDTO
+    let fee: MoneyDTO
+    let status: Status
     /// Server reason code when `status == .failed`, e.g. "declined".
-    public let failureReason: String?
-    public let createdAt: Date
-    public let updatedAt: Date
+    let failureReason: String?
+    let createdAt: Date
+    let updatedAt: Date
+}
+
+extension TransferDTO {
+    /// The status in Domain terms. A `failed` transfer carries its reason code.
+    var remoteStatus: RemoteTransferStatus {
+        switch status {
+        case .awaitingConfirmation:
+            .awaitingConfirmation
+        case .processing:
+            .processing
+        case .completed:
+            .completed
+        case .failed:
+            .failed(TransferFailure(serverCode: failureReason))
+        case .unknown:
+            .unknown
+        }
+    }
 }

@@ -62,6 +62,16 @@ enum WalletEndpoints {
         return endpoint
     }
 
+    /// No body. The server only changes an unconfirmed transfer, so repeats are safe. The key
+    /// is fixed per transfer, like the create's, so every retry is recognisably the same
+    /// confirm (Phase 7 ties the signed nonce to it too).
+    static func confirmTransfer(id: String) throws(APIError) -> Endpoint<TransferDTO> {
+        var endpoint: Endpoint<TransferDTO> = try post(
+            "/v1/transfers/\(try pathID(id))/confirm", body: EmptyRequestDTO())
+        endpoint.request.setHeader(HTTPHeader.idempotencyKey, "\(id).confirm")
+        return endpoint
+    }
+
     static func transfer(id: String) throws(APIError) -> Endpoint<TransferDTO> {
         get("/v1/transfers/\(try pathID(id))")
     }
