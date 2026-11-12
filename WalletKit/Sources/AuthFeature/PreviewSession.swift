@@ -30,5 +30,10 @@
         func signOut() async -> SessionState {
             .signedOut
         }
+        func stateUpdates() async -> AsyncStream<SessionState> {
+            AsyncStream {
+                $0.yield(.signedOut)
+            }
+        }
     }
 #endif

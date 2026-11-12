@@ -3,23 +3,31 @@ import SwiftUI
 
 /// The only public view of the feature: the accounts list, and the screens it pushes.
 ///
-/// - Parameter onSessionExpired: called when the server says the session can't be renewed.
-///   `AppCoordinator` decides what happens (Phase 5: back to sign-in). "Send money"
-///   becomes a second output in Phase 6.
+/// - Parameters:
+///   - reloadTrigger: bump it to refresh what is on screen, e.g. after a transfer.
+///   - onSessionExpired: the server says the session can't be renewed. `AppCoordinator`
+///     goes back to sign-in.
+///   - onSendMoney: "Send money" on an account. `AppCoordinator` opens the transfer flow.
 public struct AccountsFlowView: View {
     @Bindable private var router: AccountsRouter
     @State private var listViewModel: AccountsListViewModel
     private let dependencies: AccountsDependencies
+    private let reloadTrigger: Int
     private let onSessionExpired: @MainActor () -> Void
+    private let onSendMoney: @MainActor (Account) -> Void
 
     public init(
         router: AccountsRouter,
         dependencies: AccountsDependencies,
-        onSessionExpired: @escaping @MainActor () -> Void
+        reloadTrigger: Int = 0,
+        onSessionExpired: @escaping @MainActor () -> Void,
+        onSendMoney: @escaping @MainActor (Account) -> Void
     ) {
         self.router = router
         self.dependencies = dependencies
+        self.reloadTrigger = reloadTrigger
         self.onSessionExpired = onSessionExpired
+        self.onSendMoney = onSendMoney
         _listViewModel = State(
             initialValue: AccountsListViewModel(
                 dependencies: dependencies,
@@ -35,6 +43,11 @@ public struct AccountsFlowView: View {
                     destination(for: route)
                 }
         }
+        .task(id: reloadTrigger) {
+            if reloadTrigger > 0 {
+                await listViewModel.refresh()
+            }
+        }
     }
 
     @ViewBuilder private func destination(for route: AccountsRoute) -> some View {
@@ -46,7 +59,9 @@ public struct AccountsFlowView: View {
                     $0.id == accountID
                 },
                 dependencies: dependencies,
-                onSessionExpired: onSessionExpired
+                reloadTrigger: reloadTrigger,
+                onSessionExpired: onSessionExpired,
+                onSendMoney: onSendMoney
             )
         }
     }
@@ -55,23 +70,33 @@ public struct AccountsFlowView: View {
 /// Owns the detail view model for as long as the screen is on the stack.
 private struct AccountDetailScreen: View {
     @State private var viewModel: AccountDetailViewModel
+    private let reloadTrigger: Int
 
     init(
         accountID: Account.ID,
         initial: Account?,
         dependencies: AccountsDependencies,
-        onSessionExpired: @escaping @MainActor () -> Void
+        reloadTrigger: Int,
+        onSessionExpired: @escaping @MainActor () -> Void,
+        onSendMoney: @escaping @MainActor (Account) -> Void
     ) {
+        self.reloadTrigger = reloadTrigger
         _viewModel = State(
             initialValue: AccountDetailViewModel(
                 accountID: accountID,
                 initial: initial,
                 dependencies: dependencies,
-                onSessionExpired: onSessionExpired
+                onSessionExpired: onSessionExpired,
+                onSendMoney: onSendMoney
             ))
     }
 
     var body: some View {
         AccountDetailView(viewModel: viewModel)
+            .task(id: reloadTrigger) {
+                if reloadTrigger > 0 {
+                    await viewModel.refresh()
+                }
+            }
     }
 }

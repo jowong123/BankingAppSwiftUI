@@ -42,6 +42,15 @@ enum AuthStrings {
     static var signOut: String {
         text("auth.unlock.signOut")
     }
+    static var pendingTransferTitle: String {
+        text("auth.unlock.pendingTransfer.title")
+    }
+    static var pendingTransferMessage: String {
+        text("auth.unlock.pendingTransfer.message")
+    }
+    static var staySignedIn: String {
+        text("auth.unlock.pendingTransfer.stay")
+    }
     static var tooManyAttemptsTitle: String {
         text("auth.unlock.tooManyAttempts.title")
     }

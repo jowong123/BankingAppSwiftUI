@@ -19,6 +19,9 @@
 "auth.unlock.useFaceID" = "Use Face ID";
 "auth.unlock.biometricReason" = "Unlock Wallet";
 "auth.unlock.signOut" = "Sign out";
+"auth.unlock.pendingTransfer.title" = "A transfer is still sending";
+"auth.unlock.pendingTransfer.message" = "If you sign out now, it may not finish. Check your account history after you sign in again.";
+"auth.unlock.pendingTransfer.stay" = "Stay signed in";
 "auth.unlock.tooManyAttempts.title" = "Too many wrong PINs";
 "auth.unlock.tooManyAttempts.message" = "For your security you've been signed out. Sign in again to continue.";
 "auth.ok" = "OK";

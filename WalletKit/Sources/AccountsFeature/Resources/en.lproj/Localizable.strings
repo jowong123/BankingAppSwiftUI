@@ -16,6 +16,9 @@
 /* Footer when loading the next page of history fails. */
 "accounts.transactions.loadMoreFailed" = "Couldn't load more transactions.";
 
+/* Button on an account that starts a transfer from it. */
+"accounts.sendMoney" = "Send money";
+
 /* Button that repeats a failed load. */
 "accounts.retry" = "Retry";
 

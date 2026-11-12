@@ -111,6 +111,33 @@ import Testing
         #expect(await session.calls == ["unlock"])
     }
 
+    /// Signing out deletes the outbox: with a transfer still sending, ask first.
+    @Test func signOutWithAPendingTransferAsksFirst() async {
+        let viewModel = UnlockViewModel(
+            dependencies: AuthDependencies(
+                session: session,
+                hasPendingTransfers: {
+                    true
+                }),
+            onSessionChange: { [changes] in
+                changes.record($0)
+            }
+        )
+
+        await viewModel.signOut()
+        #expect(viewModel.state.confirmsSignOut)
+        #expect(await session.calls.isEmpty)
+
+        viewModel.cancelSignOut()
+        #expect(!viewModel.state.confirmsSignOut)
+        #expect(changes.states.isEmpty)
+
+        await viewModel.signOut()
+        await viewModel.confirmSignOut()
+        #expect(await session.calls == ["signOut"])
+        #expect(changes.states == [.signedOut])
+    }
+
     @Test func signOutReportsSignedOut() async {
         let viewModel = makeViewModel()
 

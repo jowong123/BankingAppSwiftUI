@@ -19,6 +19,23 @@ import Testing
         )
     }
 
+    @Test func sendMoneyHandsTheAccountToTheCoordinator() {
+        var handed: [Account] = []
+        let viewModel = AccountDetailViewModel(
+            accountID: "acc_sgd",
+            initial: sampleAccounts[0],
+            dependencies: AccountsDependencies(repository: repository),
+            onSessionExpired: {},
+            onSendMoney: {
+                handed.append($0)
+            }
+        )
+
+        viewModel.sendMoney()
+
+        #expect(handed == [sampleAccounts[0]])
+    }
+
     @Test func loadsTheFirstPage() async {
         await repository.setPage(cursor: nil, page(["t1", "t2"], next: "c2"))
         let viewModel = makeViewModel()

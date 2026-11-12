@@ -4,6 +4,7 @@ import Domain
 import Foundation
 import Observation
 import SwiftUI
+import TransferFeature
 
 /// Composes the feature flows from the session state, and locks the app on its own after
 /// inactivity or time in the background (SPEC section 4).
@@ -28,6 +29,10 @@ final class AppCoordinator {
     private(set) var needsLockCheck = false
     let accountsRouter = AccountsRouter()
     private(set) var authRouter = AuthRouter()
+    /// The send-money flow over Accounts, while it's open.
+    private(set) var transfer: TransferPresentation?
+    /// Bumped when a transfer flow closes, so Accounts shows the new balance.
+    private(set) var accountsReload = 0
     private let environment: AppEnvironment
     private let now: () -> ContinuousClock.Instant
     private var lastActivity: ContinuousClock.Instant
@@ -53,6 +58,10 @@ final class AppCoordinator {
         environment.auth
     }
 
+    var transferDependencies: TransferDependencies {
+        environment.transfers
+    }
+
     /// Balances, or a live session waiting for its PIN: both time out.
     var isTimed: Bool {
         root == .accounts || root == .createPIN
@@ -72,6 +81,34 @@ final class AppCoordinator {
             environment.firstLaunch?.markLaunched()
         }
         apply(await environment.session.restore())
+    }
+
+    /// Follows the session for changes nobody here asked for: a refused token refresh in a
+    /// background call signs out (SPEC section 6). Runs after `start()`, never before: until
+    /// `restore()` has read the Keychain the store reports `.signedOut`.
+    func observeSession() async {
+        for await state in await environment.session.stateUpdates() {
+            guard state == .signedOut else {
+                continue
+            }
+            switch root {
+            case .accounts:
+                apply(.signedOut, notice: .sessionExpired)
+            case .createPIN, .unlock:
+                apply(.signedOut)
+            case .launching, .signIn:
+                break
+            }
+        }
+    }
+
+    func sendMoney(from account: Account) {
+        transfer = TransferPresentation(source: account)
+    }
+
+    func transferFinished() {
+        transfer = nil
+        accountsReload += 1
     }
 
     /// From AuthFeature after sign-in, PIN creation, unlock or sign-out.
@@ -114,6 +151,11 @@ final class AppCoordinator {
         if isTimed, policy.shouldLockOnReturn(away: away) || policy.shouldLock(idle: current - lastActivity) {
             await timeOut()
         }
+        // A send that stopped while the phone was locked (the store is unreadable then) picks
+        // up again.
+        if root == .accounts || root == .unlock {
+            await environment.outbox.resumePending()
+        }
     }
 
     func checkInactivity() async {
@@ -132,7 +174,25 @@ final class AppCoordinator {
         }
     }
 
+    /// Runs on every root change (`AppRootView`). Signed in: carry on with pending transfers.
+    /// Sign-in screen: there is no session to send them with, so they are deleted, like the
+    /// tokens. Tied to the root rather than to session events, so no sign-out path (Unlock,
+    /// expiry, five wrong PINs, a launch with no session) can skip it.
+    func rootChanged() async {
+        switch root {
+        case .signIn:
+            await environment.outbox.removeAll()
+        case .accounts, .unlock:
+            await environment.outbox.resumePending()
+        case .launching, .createPIN:
+            break
+        }
+    }
+
     private func apply(_ state: SessionState, notice: SignInNotice? = nil) {
+        if state != .unlocked {
+            transfer = nil
+        }
         switch state {
         case .signedOut:
             if root != .signIn(notice) {
@@ -170,6 +230,7 @@ struct AppRootView: View {
             }
             .task {
                 await coordinator.start()
+                await coordinator.observeSession()
             }
             .onChange(of: scenePhase) { _, phase in
                 if phase == .background {
@@ -182,6 +243,7 @@ struct AppRootView: View {
                 }
             }
             .task(id: coordinator.root) {
+                await coordinator.rootChanged()
                 // Only while something times out; cancelled when the root changes.
                 while coordinator.isTimed, !Task.isCancelled {
                     try? await Task.sleep(for: coordinator.inactivityCheckInterval)
@@ -225,10 +287,35 @@ struct AppRootView: View {
             AccountsFlowView(
                 router: coordinator.accountsRouter,
                 dependencies: coordinator.accountsDependencies,
+                reloadTrigger: coordinator.accountsReload,
                 onSessionExpired: {
                     coordinator.sessionExpired()
+                },
+                onSendMoney: { account in
+                    coordinator.sendMoney(from: account)
                 }
             )
+            .fullScreenCover(
+                item: Binding(
+                    get: {
+                        coordinator.transfer
+                    },
+                    set: { _ in
+                    }
+                )
+            ) { presentation in
+                TransferFlowView(
+                    router: presentation.router,
+                    dependencies: coordinator.transferDependencies,
+                    source: presentation.source,
+                    onFinish: {
+                        coordinator.transferFinished()
+                    },
+                    onSessionExpired: {
+                        coordinator.sessionExpired()
+                    }
+                )
+            }
         }
     }
 }

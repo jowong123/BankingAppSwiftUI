@@ -59,6 +59,11 @@ actor FakeSession: SessionManaging {
         calls.append("signOut")
         return .signedOut
     }
+    func stateUpdates() async -> AsyncStream<SessionState> {
+        AsyncStream {
+            $0.yield(.signedOut)
+        }
+    }
 }
 
 /// Collects what a screen reports through `onSessionChange`.

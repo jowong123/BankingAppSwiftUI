@@ -20,6 +20,9 @@ struct AppEnvironment: Sendable {
     let linkedModules: [String]
     let session: any SessionManaging
     let accounts: AccountsDependencies
+    let transfers: TransferDependencies
+    /// Sends and resumes transfers. Wiped whenever the session ends.
+    let outbox: any TransferOutboxing
     let autoLock: AutoLockPolicy
     /// `nil` in the UI-test mock, which starts empty every launch anyway.
     let firstLaunch: (any FirstLaunchMarker)?
@@ -27,7 +30,11 @@ struct AppEnvironment: Sendable {
     let resetSessionOnLaunch: Bool
 
     var auth: AuthDependencies {
-        AuthDependencies(session: session)
+        AuthDependencies(
+            session: session,
+            hasPendingTransfers: { [outbox] in
+                await outbox.hasPending()
+            })
     }
 
     /// The backend comes from `WalletAPIBaseURL` in the build's Info.plist
@@ -38,6 +45,8 @@ struct AppEnvironment: Sendable {
     /// - `-uiTesting`: no simulated network delay. `-simulateOffline`: accounts fail offline.
     /// - `-autoLockSeconds <n>`: lock after n seconds instead of 5 and 2 minutes.
     /// - `-resetSession`: sign out at launch.
+    /// - `-quoteSeconds <n>`: quotes hold n seconds instead of 30. `-transferDelay <n>`: each
+    ///   transfer call takes n seconds. `-keepMockSession`: the mock session survives a relaunch.
     static func live(
         arguments: [String] = ProcessInfo.processInfo.arguments,
         info: [String: Any]? = Bundle.main.infoDictionary
@@ -54,8 +63,12 @@ struct AppEnvironment: Sendable {
         guard let baseURL = baseURL(from: info) else {
             let session = SessionStore(api: UnconfiguredAuthAPI(), store: store, biometrics: DeviceBiometrics())
             return make(
-                session: session,
-                accounts: UnconfiguredAccountsRepository(),
+                services: Services(
+                    session: session,
+                    accounts: UnconfiguredAccountsRepository(),
+                    transfers: UnconfiguredTransfersRepository(),
+                    outbox: outbox(named: outboxFolder, api: UnconfiguredTransferAPI())
+                ),
                 autoLock: autoLockPolicy(arguments),
                 firstLaunch: DefaultsFirstLaunchMarker(),
                 resetSession: resetSession
@@ -64,11 +77,15 @@ struct AppEnvironment: Sendable {
         let session = SessionStore(api: RemoteAuthAPI(baseURL: baseURL), store: store, biometrics: DeviceBiometrics())
         // One client for every feature: one AuthInterceptor, so one refresh at a time. Two
         // would refresh in parallel with the same rotating token and sign the user out
-        // (ADR-016). Phase 6's transfer repository takes this same `api`.
+        // (ADR-016). The transfer calls take this same `api`.
         let api = WalletAPI(baseURL: baseURL, tokens: session)
         return make(
-            session: session,
-            accounts: RemoteAccountsRepository(api: api),
+            services: Services(
+                session: session,
+                accounts: RemoteAccountsRepository(api: api),
+                transfers: RemoteTransfersRepository(api: api),
+                outbox: outbox(named: outboxFolder, api: RemoteTransferAPI(api: api))
+            ),
             autoLock: autoLockPolicy(arguments),
             firstLaunch: DefaultsFirstLaunchMarker(),
             resetSession: resetSession
@@ -76,6 +93,16 @@ struct AppEnvironment: Sendable {
     }
 
     static let keychainService = "jw.Wallet.session"
+    static let outboxFolder = "Outbox"
+
+    /// The outbox store in Application Support. It opens on first use, so a launch while the
+    /// phone is locked doesn't break it; until it can open, nothing is sent (ADR-009).
+    private static func outbox(named folder: String, api: any TransferAPI) -> any TransferOutboxing {
+        TransferOutbox(
+            directory: URL.applicationSupportDirectory.appending(path: folder, directoryHint: .isDirectory),
+            api: api
+        )
+    }
 
     static func baseURL(from info: [String: Any]?) -> URL? {
         guard let text = info?["WalletAPIBaseURL"] as? String, let url = URL(string: text), url.host() != nil
@@ -85,9 +112,16 @@ struct AppEnvironment: Sendable {
         return url
     }
 
+    /// The implementations one environment is built from: real, unconfigured or mock.
+    private struct Services {
+        let session: SessionStore
+        let accounts: any AccountsRepository
+        let transfers: any TransfersRepository
+        let outbox: any TransferOutboxing
+    }
+
     private static func make(
-        session: SessionStore,
-        accounts: any AccountsRepository,
+        services: Services,
         autoLock: AutoLockPolicy,
         firstLaunch: (any FirstLaunchMarker)?,
         resetSession: Bool
@@ -99,15 +133,17 @@ struct AppEnvironment: Sendable {
                 NavigationModule.name,
                 moduleName(of: WalletAPI.self),
                 moduleName(of: SessionStore.self),
-                PersistenceModule.name,
+                moduleName(of: TransferOutbox.self),
                 ObservabilityModule.name,
                 moduleName(of: AuthFlowView.self),
                 OnboardingFeatureModule.name,
                 moduleName(of: AccountsFlowView.self),
-                TransferFeatureModule.name,
+                moduleName(of: TransferFlowView.self),
             ],
-            session: session,
-            accounts: AccountsDependencies(repository: accounts),
+            session: services.session,
+            accounts: AccountsDependencies(repository: services.accounts),
+            transfers: TransferDependencies(repository: services.transfers, outbox: services.outbox),
+            outbox: services.outbox,
             autoLock: autoLock,
             firstLaunch: firstLaunch,
             resetSessionOnLaunch: resetSession
@@ -126,17 +162,39 @@ struct AppEnvironment: Sendable {
     }
 
     #if DEBUG
+        /// Everything in memory except the outbox, which needs a file to survive a kill. It
+        /// lives in its own folder and, like the real one, is wiped when there's no session.
         private static func mock(arguments: [String]) -> AppEnvironment {
-            make(
-                session: SessionStore(api: MockAuthAPI(), store: InMemorySecureStore(), biometrics: NoBiometrics()),
-                accounts: MockAccountsRepository(
-                    isOffline: arguments.contains("-simulateOffline"),
-                    delay: arguments.contains("-uiTesting") ? .zero : .milliseconds(600)
+            let delay = arguments.contains("-uiTesting") ? Duration.zero : .milliseconds(600)
+            let bank = MockBank(quoteLifetime: TimeInterval(number(after: "-quoteSeconds", in: arguments) ?? 30))
+            let transferDelay = number(after: "-transferDelay", in: arguments).map(Duration.seconds) ?? delay
+            // A UI test that relaunches mid-transfer needs the session to survive: the real
+            // Keychain under a test-only service. Otherwise nothing outlives the process.
+            let store: any SecureStore =
+                arguments.contains("-keepMockSession")
+                ? KeychainStore(service: "jw.Wallet.uitest") : InMemorySecureStore()
+            return make(
+                services: Services(
+                    session: SessionStore(api: MockAuthAPI(), store: store, biometrics: NoBiometrics()),
+                    accounts: MockAccountsRepository(
+                        bank: bank,
+                        isOffline: arguments.contains("-simulateOffline"),
+                        delay: delay
+                    ),
+                    transfers: MockTransfersRepository(bank: bank, delay: delay),
+                    outbox: outbox(named: "Outbox-Mock", api: MockTransferAPI(bank: bank, delay: transferDelay))
                 ),
                 autoLock: autoLockPolicy(arguments),
                 firstLaunch: nil,
-                resetSession: false
+                resetSession: arguments.contains("-resetSession")
             )
+        }
+
+        private static func number(after flag: String, in arguments: [String]) -> Int? {
+            guard let index = arguments.firstIndex(of: flag), index + 1 < arguments.count else {
+                return nil
+            }
+            return Int(arguments[index + 1])
         }
     #endif
 

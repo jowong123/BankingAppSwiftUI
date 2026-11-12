@@ -6,6 +6,7 @@ struct UnlockView: View {
     @State private var submission: PINSubmission?
     @State private var biometricRequests = 0
     @State private var signOutRequests = 0
+    @State private var confirmedSignOuts = 0
 
     var body: some View {
         VStack(spacing: Spacing.xLarge) {
@@ -56,8 +57,32 @@ struct UnlockView: View {
         } message: {
             Text(AuthStrings.tooManyAttemptsMessage)
         }
+        .alert(
+            AuthStrings.pendingTransferTitle,
+            isPresented: Binding(
+                get: {
+                    viewModel.state.confirmsSignOut
+                },
+                set: { _ in
+                }
+            )
+        ) {
+            Button(AuthStrings.signOut, role: .destructive) {
+                confirmedSignOuts += 1
+            }
+            Button(AuthStrings.staySignedIn, role: .cancel) {
+                viewModel.cancelSignOut()
+            }
+        } message: {
+            Text(AuthStrings.pendingTransferMessage)
+        }
         .task {
             await viewModel.onAppear()
+        }
+        .task(id: confirmedSignOuts) {
+            if confirmedSignOuts > 0 {
+                await viewModel.confirmSignOut()
+            }
         }
         .task(id: submission) {
             if let submission {

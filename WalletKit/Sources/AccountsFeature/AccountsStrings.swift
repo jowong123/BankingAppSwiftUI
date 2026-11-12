@@ -18,6 +18,9 @@ enum AccountsStrings {
     static var couldNotLoadMore: String {
         text("accounts.transactions.loadMoreFailed")
     }
+    static var sendMoney: String {
+        text("accounts.sendMoney")
+    }
     static var retry: String {
         text("accounts.retry")
     }

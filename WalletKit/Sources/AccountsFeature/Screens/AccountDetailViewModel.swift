@@ -45,6 +45,7 @@ final class AccountDetailViewModel {
     private(set) var state = State()
     private let repository: any AccountsRepository
     private let onSessionExpired: @MainActor () -> Void
+    private let onSendMoney: @MainActor (Account) -> Void
     /// Bumped by every first-page load. A next-page request that started before a
     /// refresh finishes with an older value and is dropped, so a stale page is never
     /// appended to the fresh list.
@@ -56,11 +57,13 @@ final class AccountDetailViewModel {
         accountID: Account.ID,
         initial: Account?,
         dependencies: AccountsDependencies,
-        onSessionExpired: @escaping @MainActor () -> Void
+        onSessionExpired: @escaping @MainActor () -> Void,
+        onSendMoney: @escaping @MainActor (Account) -> Void = { _ in }
     ) {
         self.accountID = accountID
         self.repository = dependencies.repository
         self.onSessionExpired = onSessionExpired
+        self.onSendMoney = onSendMoney
         state.account = initial
     }
 
@@ -69,6 +72,13 @@ final class AccountDetailViewModel {
             return
         }
         await loadFirstPage()
+    }
+
+    /// Hands the account to `AppCoordinator`, which opens the send-money flow.
+    func sendMoney() {
+        if let account = state.account {
+            onSendMoney(account)
+        }
     }
 
     /// Pull to refresh: the balance and the newest page again.

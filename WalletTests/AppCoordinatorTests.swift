@@ -2,6 +2,7 @@ import AuthFeature
 import Domain
 import Foundation
 import Testing
+import TransferFeature
 import os
 
 @testable import Wallet
@@ -12,6 +13,39 @@ import os
 
     func advance(_ seconds: Int) {
         now += .seconds(seconds)
+    }
+}
+
+/// Records what the coordinator asks of the outbox.
+actor RecordingOutbox: TransferOutboxing {
+    private(set) var calls: [String] = []
+    var pending = false
+
+    func setPending(_ pending: Bool) {
+        self.pending = pending
+    }
+
+    func send(_ draft: TransferDraft) async throws(TransferError) -> Transfer {
+        calls.append("send")
+        return Transfer(draft: draft, state: .authorised, createdAt: .now, updatedAt: .now)
+    }
+
+    func updates(for id: UUID) async -> AsyncStream<Transfer> {
+        AsyncStream {
+            $0.finish()
+        }
+    }
+
+    func resumePending() async {
+        calls.append("resume")
+    }
+
+    func hasPending() async -> Bool {
+        pending
+    }
+
+    func removeAll() async {
+        calls.append("removeAll")
     }
 }
 
@@ -52,13 +86,17 @@ final class FakeFirstLaunch: FirstLaunchMarker {
 @Suite struct AppCoordinatorTests {
     let clock = TestClock()
 
-    /// Mock sign-in and storage, auto-lock after 60 s.
+    let outbox = RecordingOutbox()
+
+    /// Mock sign-in and storage, a recording outbox, auto-lock after 60 s.
     func makeCoordinator(firstLaunch: (any FirstLaunchMarker)? = nil) -> AppCoordinator {
         let mock = AppEnvironment.live(arguments: ["-mockServer", "-uiTesting", "-autoLockSeconds", "60"])
         let environment = AppEnvironment(
             linkedModules: mock.linkedModules,
             session: mock.session,
             accounts: mock.accounts,
+            transfers: TransferDependencies(repository: mock.transfers.repository, outbox: outbox),
+            outbox: outbox,
             autoLock: mock.autoLock,
             firstLaunch: firstLaunch,
             resetSessionOnLaunch: false
@@ -205,5 +243,94 @@ final class FakeFirstLaunch: FirstLaunchMarker {
 
         #expect(coordinator.root == .signIn(nil))
         #expect(marker.marked)
+    }
+
+    // MARK: - Transfers
+
+    @Test func launchWithNoSessionDeletesTheOutbox() async {
+        let coordinator = makeCoordinator()
+
+        await coordinator.start()
+        await coordinator.rootChanged()
+
+        #expect(await outbox.calls == ["removeAll"])
+    }
+
+    /// Killed mid-transfer, relaunched: the outbox carries on (SPEC section 4, launch).
+    @Test func launchWithASessionResumesPendingTransfers() async throws {
+        let coordinator = try await signedIn()
+        _ = await coordinator.authDependencies.session.lock()
+
+        await coordinator.start()
+        await coordinator.rootChanged()
+
+        #expect(coordinator.root == .unlock)
+        #expect(await outbox.calls.last == "resume")
+    }
+
+    /// The session ended in the background (a refused refresh): the app notices without a
+    /// screen asking, shows why, and deletes the outbox.
+    @Test func sessionEndingInTheBackgroundSignsOutAndDeletesTheOutbox() async throws {
+        let coordinator = try await signedIn()
+        let observing = Task {
+            await coordinator.observeSession()
+        }
+        defer {
+            observing.cancel()
+        }
+
+        _ = await coordinator.authDependencies.session.signOut()
+        for _ in 0..<200 where coordinator.root == .accounts {
+            await Task.yield()
+        }
+
+        #expect(coordinator.root == .signIn(.sessionExpired))
+        await coordinator.rootChanged()
+        #expect(await outbox.calls.last == "removeAll")
+    }
+
+    /// Every way to the sign-in screen deletes the outbox; signing in resumes it.
+    @Test func outboxFollowsTheRoot() async throws {
+        let coordinator = try await signedIn()
+        await coordinator.rootChanged()
+        #expect(await outbox.calls.last == "resume")
+
+        coordinator.sessionChanged(.signedOut)
+        await coordinator.rootChanged()
+        #expect(await outbox.calls.last == "removeAll")
+    }
+
+    @Test func sendMoneyOpensTheFlowAndClosingItRefreshesAccounts() async throws {
+        let coordinator = try await signedIn()
+        let account = Account(id: "acc_sgd", balance: Money(amountMinor: 100, currency: .sgd), updatedAt: .now)
+
+        coordinator.sendMoney(from: account)
+        #expect(coordinator.transfer?.source == account)
+
+        coordinator.transferFinished()
+        #expect(coordinator.transfer == nil)
+        #expect(coordinator.accountsReload == 1)
+    }
+
+    /// Locking takes the flow down with the balances; the outbox keeps the transfer going.
+    @Test func lockingClosesTheTransferFlow() async throws {
+        let coordinator = try await signedIn()
+        coordinator.sendMoney(
+            from: Account(id: "acc_sgd", balance: Money(amountMinor: 100, currency: .sgd), updatedAt: .now))
+        let before = await outbox.calls
+
+        clock.advance(60)
+        await coordinator.checkInactivity()
+
+        #expect(coordinator.root == .unlock)
+        #expect(coordinator.transfer == nil)
+        #expect(await outbox.calls == before)
+    }
+
+    @Test func signOutAsksAboutAPendingTransfer() async {
+        let coordinator = makeCoordinator()
+        await outbox.setPending(true)
+
+        #expect(await coordinator.authDependencies.hasPendingTransfers())
     }
 }

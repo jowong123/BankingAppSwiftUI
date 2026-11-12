@@ -20,7 +20,7 @@ import Testing
         let url = try #require(Bundle.module.url(forResource: "Localizable", withExtension: "strings"))
         let table = try #require(NSDictionary(contentsOf: url) as? [String: String])
 
-        #expect(usedKeys.count == 14)
+        #expect(usedKeys.count == 15)
         for key in usedKeys {
             #expect(table[key] != nil, "\(key) is missing from Localizable.strings")
         }

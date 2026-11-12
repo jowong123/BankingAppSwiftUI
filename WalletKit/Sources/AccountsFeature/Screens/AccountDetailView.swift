@@ -37,6 +37,10 @@ struct AccountDetailView: View {
                     AmountText(account.balance, style: .hero)
                         .foregroundStyle(Palette.textPrimary)
                         .accessibilityIdentifier("account.balance")
+                    Button(AccountsStrings.sendMoney) {
+                        viewModel.sendMoney()
+                    }
+                    .accessibilityIdentifier("account.sendMoney")
                 }
             }
             Section {

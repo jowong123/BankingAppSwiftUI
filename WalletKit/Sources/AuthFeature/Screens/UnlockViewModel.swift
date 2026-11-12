@@ -10,15 +10,19 @@ final class UnlockViewModel {
         var error: UserFacingError?
         /// The last attempt failed: explain, then sign out when the user taps OK.
         var showsTooManyAttempts = false
+        /// Sign out was tapped while a transfer is still sending: ask first.
+        var confirmsSignOut = false
     }
 
     private(set) var state = State()
     private let session: any SessionManaging
+    private let hasPendingTransfers: @Sendable () async -> Bool
     private let onSessionChange: @MainActor (SessionState) -> Void
     private var hasAppeared = false
 
     init(dependencies: AuthDependencies, onSessionChange: @escaping @MainActor (SessionState) -> Void) {
         self.session = dependencies.session
+        self.hasPendingTransfers = dependencies.hasPendingTransfers
         self.onSessionChange = onSessionChange
     }
 
@@ -76,7 +80,22 @@ final class UnlockViewModel {
         onSessionChange(.signedOut)
     }
 
+    /// Signing out deletes the transfer outbox with the session, so a transfer still
+    /// sending may not finish. Asks first when there is one.
     func signOut() async {
+        guard await !hasPendingTransfers() else {
+            state.confirmsSignOut = true
+            return
+        }
         onSessionChange(await session.signOut())
+    }
+
+    func confirmSignOut() async {
+        state.confirmsSignOut = false
+        onSessionChange(await session.signOut())
+    }
+
+    func cancelSignOut() {
+        state.confirmsSignOut = false
     }
 }
