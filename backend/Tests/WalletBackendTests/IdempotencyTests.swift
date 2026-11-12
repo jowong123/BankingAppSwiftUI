@@ -24,6 +24,51 @@ final class IdempotencyTests: XCTestCase {
         }
     }
 
+    /// A retry re-encoded with its keys in another order is the same request: the body is
+    /// compared as JSON, not byte for byte.
+    func testSameBodyWithKeysInAnotherOrderReplays() async throws {
+        try await withApp { harness in
+            let tokens = try await harness.login()
+            let quote = try await harness.quote(token: tokens.accessToken)
+            let id = UUID().uuidString.lowercased()
+            let fields = [
+                "\"id\":\"\(id)\"", "\"quoteId\":\"\(quote.id)\"",
+                "\"recipientId\":\"rcp_alice_usd\"", "\"sourceAccountId\":\"acc_sgd\"",
+            ]
+
+            let first = try await raw(harness, tokens.accessToken, key: id, "{" + fields.joined(separator: ",") + "}")
+            let second = try await raw(
+                harness, tokens.accessToken, key: id, "{" + fields.reversed().joined(separator: ",") + "}")
+
+            XCTAssertEqual(first.status, .created)
+            XCTAssertEqual(second.status, .created)
+            XCTAssertEqual(second.headers.first(name: "Idempotent-Replayed"), "true")
+            let count = try await transferCount(harness)
+            XCTAssertEqual(count, 1)
+        }
+    }
+
+    func testCanonicalBodyIgnoresKeyOrderButNotValues() {
+        let sorted = IdempotencyMiddleware.canonical(Data(#"{"a":1,"b":{"d":2,"c":3}}"#.utf8))
+        let shuffled = IdempotencyMiddleware.canonical(Data(#"{"b":{"c":3,"d":2},"a":1}"#.utf8))
+        let changed = IdempotencyMiddleware.canonical(Data(#"{"b":{"c":3,"d":2},"a":2}"#.utf8))
+
+        XCTAssertEqual(sorted, shuffled)
+        XCTAssertNotEqual(sorted, changed)
+        XCTAssertEqual(IdempotencyMiddleware.canonical(Data("not json".utf8)), Data("not json".utf8))
+    }
+
+    private func raw(_ harness: Harness, _ token: String, key: String, _ json: String) async throws
+        -> XCTHTTPResponse
+    {
+        var headers: HTTPHeaders = ["Idempotency-Key": key]
+        headers.bearerAuthorization = BearerAuthorization(token: token)
+        headers.contentType = .json
+        let request = XCTHTTPRequest(
+            method: .POST, url: URI(path: "/v1/transfers"), headers: headers, body: ByteBuffer(string: json))
+        return try await harness.app.testable().performTest(request: request)
+    }
+
     func testSameKeyAndBodyReplaysTheOriginalResponseAndCreatesOneTransfer() async throws {
         try await withApp { harness in
             let tokens = try await harness.login()
@@ -154,7 +199,7 @@ final class IdempotencyTests: XCTestCase {
                     scopedKey: "usr_demo:\(body.id)",
                     method: "POST",
                     path: "/v1/transfers",
-                    bodyHash: SHA256.hash(data: try JSONEncoder().encode(body)).hex,
+                    bodyHash: SHA256.hash(data: IdempotencyMiddleware.canonical(try JSONEncoder().encode(body))).hex,
                     lockOwner: "crashed",
                     completed: 0,
                     status: 0,

@@ -10,6 +10,9 @@ enum Sandbox {
     /// A second user, so tests can prove one user can't read another's data.
     static let otherEmail = "other@wallet.test"
     static let otherPassword = "sandbox-other"
+    /// Transfers to this payee are declined at settlement and refunded, so the app's
+    /// Processing → Failed path can be tried by hand.
+    static let declinedRecipientID = "rcp_decline_eur"
 }
 
 struct SeedSandboxData: AsyncMigration {
@@ -54,6 +57,9 @@ struct SeedSandboxData: AsyncMigration {
                 id: "rcp_marie_eur", userId: "usr_demo", name: "Marie Dubois", currency: "EUR", accountLast4: "7710"),
             RecipientRow(
                 id: "rcp_omar_kwd", userId: "usr_demo", name: "Omar Al-Sabah", currency: "KWD", accountLast4: "3302"),
+            RecipientRow(
+                id: Sandbox.declinedRecipientID, userId: "usr_demo", name: "Test: always declined", currency: "EUR",
+                accountLast4: "0000"),
             RecipientRow(
                 id: "rcp_other_usd", userId: "usr_other", name: "Bob Lee", currency: "USD", accountLast4: "1111"),
         ]

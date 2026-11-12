@@ -1,8 +1,8 @@
 import SQLKit
 import Vapor
 
-/// Creating a transfer only records it as `awaiting_confirmation`. The signed confirm that
-/// moves money arrives in Phase 7 (SPEC section 6), so no balance changes here.
+/// Creating a transfer only records it as `awaiting_confirmation`; nothing is debited until
+/// `confirm` (TransfersController+Confirm.swift).
 struct TransfersController: Sendable {
     let clock: BackendClock
 
@@ -28,7 +28,8 @@ struct TransfersController: Sendable {
         // (which expires after 24 h and is released on a 5xx). A retry of a transfer that
         // was committed always gets the transfer back, never "quote expired".
         if let existing = try await existingTransfer(transferID, matching: body, userID: user.id, sql: request.sql) {
-            return try await TransferDTO(existing).encodeResponse(status: .ok, for: request)
+            let current = try await settleIfDue(existing, on: request.db)
+            return try await TransferDTO(current).encodeResponse(status: .ok, for: request)
         }
 
         let row = try await request.db.transaction { database in
@@ -149,13 +150,9 @@ struct TransfersController: Sendable {
     @Sendable func show(_ request: Request) async throws -> TransferDTO {
         let user = try request.auth.require(AuthenticatedUser.self)
         let id = try request.parameters.require("transferID")
-        guard
-            let row = try await request.sql.select().column("*").from("transfers")
-                .where("id", .equal, id.lowercased()).where("userId", .equal, user.id)
-                .first(decoding: TransferRow.self)
-        else {
+        guard let row = try await Self.transfer(id.lowercased(), userID: user.id, sql: request.sql) else {
             throw APIFailure.notFound
         }
-        return TransferDTO(row)
+        return TransferDTO(try await settleIfDue(row, on: request.db))
     }
 }

@@ -26,7 +26,11 @@ struct Harness {
         var body = ByteBuffer()
         if let json {
             headers.contentType = .json
-            body = ByteBuffer(data: try JSONEncoder().encode(json))
+            // Sorted, so a test that sends the same body twice sends the same bytes. This
+            // Foundation's encoder doesn't keep key order stable between calls.
+            let encoder = JSONEncoder()
+            encoder.outputFormatting = [.sortedKeys]
+            body = ByteBuffer(data: try encoder.encode(json))
         }
         let request = XCTHTTPRequest(method: method, url: URI(path: path), headers: headers, body: body)
         return try await app.testable().performTest(request: request)

@@ -115,7 +115,7 @@ final class AccountsTests: XCTestCase {
             let response = try await harness.send(.GET, "/v1/recipients", token: tokens.accessToken)
 
             let recipients = try response.content.decode(RecipientsResponse.self).recipients
-            XCTAssertEqual(recipients.count, 4)
+            XCTAssertEqual(recipients.count, 5)
             XCTAssertFalse(
                 recipients.contains {
                     $0.id == "rcp_other_usd"

@@ -49,4 +49,6 @@ func routes(_ app: Application, environment: BackendEnvironment) throws {
     let transfers = TransfersController(clock: clock)
     signedIn.grouped(IdempotencyMiddleware(required: true, clock: clock)).post("transfers", use: transfers.create)
     signedIn.get("transfers", ":transferID", use: transfers.show)
+    // Idempotent by status (only `awaiting_confirmation` changes), so no key record needed.
+    signedIn.post("transfers", ":transferID", "confirm", use: transfers.confirm)
 }

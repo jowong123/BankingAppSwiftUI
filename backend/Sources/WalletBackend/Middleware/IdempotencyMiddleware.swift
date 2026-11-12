@@ -8,7 +8,7 @@ import Vapor
 /// 2. The key is **claimed** with an insert that ignores conflicts, then read back. If
 ///    another request owns it and hasn't finished, this one gets 409 instead of running
 ///    the handler a second time. That closes the race where two retries arrive together.
-/// 3. A finished record with the same method, path and body hash is replayed verbatim with
+/// 3. A finished record with the same method, path and body is replayed verbatim with
 ///    `Idempotent-Replayed: true`. Anything else with that key is 422 `idempotency_mismatch`.
 /// 4. After the handler runs, a returned response below 500 is stored. A thrown error
 ///    (every `APIFailure`) or a 5xx releases the key so a retry runs the handler again.
@@ -80,9 +80,11 @@ struct IdempotencyMiddleware: AsyncMiddleware {
             method: request.method.rawValue,
             path: request.url.path,
             bodyHash: SHA256.hash(
-                data: body.map {
-                    Data(buffer: $0)
-                } ?? Data()
+                data: Self.canonical(
+                    body.map {
+                        Data(buffer: $0)
+                    } ?? Data()
+                )
             ).hex,
             lockOwner: UUID().uuidString,
             completed: 0,
@@ -105,6 +107,19 @@ struct IdempotencyMiddleware: AsyncMiddleware {
             .where("scopedKey", .equal, claim.scopedKey)
             .where("lockOwner", .equal, claim.lockOwner)
             .run()
+    }
+
+    /// The body as compared between a request and its retry: JSON with its keys sorted, so
+    /// the same content matches whatever order the client's encoder wrote the keys in.
+    /// Anything that isn't a JSON object or array is compared byte for byte.
+    static func canonical(_ body: Data) -> Data {
+        guard let object = try? JSONSerialization.jsonObject(with: body),
+            JSONSerialization.isValidJSONObject(object),
+            let sorted = try? JSONSerialization.data(withJSONObject: object, options: [.sortedKeys])
+        else {
+            return body
+        }
+        return sorted
     }
 
     private func replay(_ stored: IdempotencyRow, for claim: IdempotencyRow) throws -> Response {
