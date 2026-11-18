@@ -10,7 +10,7 @@
         static let sentID = UUID()
 
         static var dependencies: TransferDependencies {
-            TransferDependencies(repository: Repository(), outbox: Outbox())
+            TransferDependencies(repository: Repository(), outbox: Outbox(), signer: Signer())
         }
 
         static func quote() -> FXQuote {
@@ -39,6 +39,18 @@
             func quote(sourceAmount: Money, targetCurrency: Currency) async throws(TransferError) -> FXQuote {
                 PreviewTransfers.quote()
             }
+            func challenge(transferID: UUID) async throws(TransferError) -> SigningChallenge {
+                SigningChallenge(nonce: "preview", expiresAt: .now.addingTimeInterval(60))
+            }
+        }
+
+        private struct Signer: TransferSigning {
+            func availability() async -> SigningAvailability {
+                .ready
+            }
+            func sign(_ payload: ConfirmPayload, reason: String) async throws(SigningError) -> SignedConfirmation {
+                SignedConfirmation(payload: Data(), signature: Data(), assertion: nil)
+            }
         }
 
         private struct Outbox: TransferOutboxing {
@@ -48,7 +60,8 @@
             func updates(for id: UUID) async -> AsyncStream<Transfer> {
                 let draft = TransferDraft(
                     id: id, quote: PreviewTransfers.quote(), recipient: PreviewTransfers.recipient,
-                    sourceAccountID: "acc_sgd")
+                    sourceAccountID: "acc_sgd",
+                    confirmation: SignedConfirmation(payload: Data(), signature: Data(), assertion: nil))
                 return AsyncStream {
                     $0.yield(Transfer(draft: draft, state: .processing, createdAt: .now, updatedAt: .now))
                 }

@@ -30,6 +30,21 @@
 "transfer.review.rateUpdated.message" = "Check the new amounts before you send.";
 "transfer.review.rateUpdated.ok" = "OK";
 "transfer.review.send" = "Send";
+/* The Face ID prompt's reason. First %@ is the amount, e.g. "SGD 100.00"; second the recipient. */
+"transfer.review.approveReason" = "Approve sending %@ to %@";
+
+/* Approving with Face ID (SPEC section 6). */
+"transfer.signing.failed.title" = "Couldn't approve the transfer";
+"transfer.signing.failed.message" = "Face ID didn't confirm it's you. Nothing was sent; tap Send to try again.";
+"transfer.signing.keyInvalidated.title" = "Face ID has changed";
+"transfer.signing.keyInvalidated.message" = "Faces or fingerprints were added or removed on this iPhone, so it can no longer approve transfers. Sign in again to set it up with the current Face ID.";
+"transfer.signing.biometryNotSetUp.title" = "Set up Face ID to send money";
+"transfer.signing.biometryNotSetUp.message" = "Sending money needs Face ID or Touch ID. Turn it on in Settings, then sign in again.";
+"transfer.signing.signInAgain" = "Sign in again";
+"transfer.signing.close" = "Close";
+"transfer.signing.pendingSignOut.title" = "A transfer is still sending";
+"transfer.signing.pendingSignOut.message" = "Signing out now cancels it. Nothing is sent unless it already went through.";
+"transfer.signing.pendingSignOut.confirm" = "Sign out";
 
 /* Status screen. %@ is the recipient's name. */
 "transfer.status.sending.title" = "Sending";
@@ -44,6 +59,10 @@
 "transfer.status.failed.insufficientFunds.message" = "Nothing was sent. Your balance didn't cover this transfer.";
 "transfer.status.failed.declined.title" = "Transfer declined";
 "transfer.status.failed.declined.message" = "The money is back in your account.";
+"transfer.status.failed.approvalExpired.title" = "Approval expired";
+"transfer.status.failed.approvalExpired.message" = "Nothing was sent. The approval only lasts a minute; start again to send.";
+"transfer.status.failed.notApproved.title" = "Couldn't verify this transfer";
+"transfer.status.failed.notApproved.message" = "Nothing was sent. Start again, and approve with Face ID when asked.";
 "transfer.status.failed.rejected.title" = "Transfer didn't go through";
 "transfer.status.failed.rejected.message" = "Nothing was sent. Please try again.";
 

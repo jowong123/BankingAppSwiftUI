@@ -62,6 +62,9 @@ actor FakeTransfersRepository: TransfersRepository {
     var recipientsResult: Result<[Recipient], TransferError> = .success(Sample.recipients)
     private var quoteResults: [Result<FXQuote, TransferError>] = []
     private(set) var quoteRequests: [Money] = []
+    private(set) var challengeRequests: [UUID] = []
+    var challengeResult: Result<SigningChallenge, TransferError> = .success(
+        SigningChallenge(nonce: "nonce-1", expiresAt: .distantFuture))
     /// Quotes it makes when nothing is scripted expire 30 s after this clock's time.
     private let clock: TestClock
 
@@ -77,8 +80,17 @@ actor FakeTransfersRepository: TransfersRepository {
         quoteResults.append(contentsOf: quotes)
     }
 
+    func set(challenge: Result<SigningChallenge, TransferError>) {
+        challengeResult = challenge
+    }
+
     func recipients() async throws(TransferError) -> [Recipient] {
         try recipientsResult.get()
+    }
+
+    func challenge(transferID: UUID) async throws(TransferError) -> SigningChallenge {
+        challengeRequests.append(transferID)
+        return try challengeResult.get()
     }
 
     func quote(sourceAmount: Money, targetCurrency: Currency) async throws(TransferError) -> FXQuote {
@@ -87,6 +99,49 @@ actor FakeTransfersRepository: TransfersRepository {
             return Sample.quote(id: "q_\(quoteRequests.count)", expiresAt: clock.now().addingTimeInterval(30))
         }
         return try quoteResults.removeFirst().get()
+    }
+}
+
+/// Face ID that approves at once, or answers with a scripted error.
+actor FakeSigner: TransferSigning {
+    var availabilityResult = SigningAvailability.ready
+    var signError: SigningError?
+    private(set) var signed: [ConfirmPayload] = []
+    private(set) var reasons: [String] = []
+
+    func set(availability: SigningAvailability) {
+        availabilityResult = availability
+    }
+
+    func fail(with error: SigningError?) {
+        signError = error
+    }
+
+    private var gate: Gate?
+    /// Called while the prompt is "up", before it answers.
+    private var duringPrompt: (@Sendable () -> Void)?
+
+    func holdPrompt(at gate: Gate) {
+        self.gate = gate
+    }
+
+    func whilePromptIsUp(_ action: @escaping @Sendable () -> Void) {
+        duringPrompt = action
+    }
+
+    func availability() async -> SigningAvailability {
+        availabilityResult
+    }
+
+    func sign(_ payload: ConfirmPayload, reason: String) async throws(SigningError) -> SignedConfirmation {
+        duringPrompt?()
+        await gate?.wait()
+        if let signError {
+            throw signError
+        }
+        signed.append(payload)
+        reasons.append(reason)
+        return Sample.confirmation
     }
 }
 
@@ -132,8 +187,14 @@ actor FakeOutbox: TransferOutboxing {
 
     func resumePending() async {}
 
+    private var pending = false
+
+    func setPending(_ value: Bool) {
+        pending = value
+    }
+
     func hasPending() async -> Bool {
-        false
+        pending
     }
 
     func removeAll() async {}
@@ -144,6 +205,7 @@ enum Sample {
     static let alice = Recipient(id: "rcp_alice_usd", name: "Alice Tan", currency: .usd, accountLast4: "4821")
     static let sgdPayee = Recipient(id: "rcp_sgd", name: "Same Currency", currency: .sgd, accountLast4: "1234")
     static let recipients = [alice, sgdPayee]
+    static let confirmation = SignedConfirmation(payload: Data("signed".utf8), signature: Data([1]), assertion: nil)
 
     static func quote(id: String = "q_1", expiresAt: Date) -> FXQuote {
         guard let rate = try? FXRate(source: .sgd, target: .usd, rate: Decimal(string: "0.7341") ?? 1),
@@ -166,7 +228,8 @@ enum Sample {
             id: id,
             quote: quote(expiresAt: .now),
             recipient: alice,
-            sourceAccountID: "acc_sgd"
+            sourceAccountID: "acc_sgd",
+            confirmation: confirmation
         )
         return Transfer(draft: draft, state: state, failure: failure, createdAt: .now, updatedAt: .now)
     }
@@ -190,7 +253,8 @@ enum Sample {
 func dependencies(
     repository: FakeTransfersRepository,
     outbox: FakeOutbox = FakeOutbox(),
+    signer: FakeSigner = FakeSigner(),
     clock: TestClock
 ) -> TransferDependencies {
-    TransferDependencies(repository: repository, outbox: outbox, now: clock.now, sleep: clock.sleep)
+    TransferDependencies(repository: repository, outbox: outbox, signer: signer, now: clock.now, sleep: clock.sleep)
 }

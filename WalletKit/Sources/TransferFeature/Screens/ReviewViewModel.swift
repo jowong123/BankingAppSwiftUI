@@ -9,6 +9,8 @@ import Observation
 ///   section 5).
 /// - The transfer ID is made once, when the screen opens. A double tap, or a tap while the
 ///   first send is still saving, can only ever send that one ID.
+/// - Send gets a nonce, asks for Face ID, and signs what the screen shows (SPEC section 6),
+///   all before the outbox sees the transfer: the outbox never needs to prompt (ADR-023).
 @Observable @MainActor
 final class ReviewViewModel {
     struct State: Equatable {
@@ -87,11 +89,25 @@ final class ReviewViewModel {
             return
         }
         state.isSending = true
+        state.error = nil
+        let quote = state.quote
+        guard let confirmation = await approve(quote) else {
+            state.isSending = false
+            return
+        }
+        // The rate ran out while the Face ID prompt was up: the server would refuse it, so
+        // drop the approval and show the new rate instead.
+        guard !quote.isExpired(at: dependencies.now()) else {
+            state.isSending = false
+            await requote()
+            return
+        }
         let draft = TransferDraft(
             id: transferID,
-            quote: state.quote,
+            quote: quote,
             recipient: recipient,
-            sourceAccountID: source.id
+            sourceAccountID: source.id,
+            confirmation: confirmation
         )
         do throws(TransferError) {
             _ = try await dependencies.outbox.send(draft)
@@ -100,6 +116,52 @@ final class ReviewViewModel {
         } catch {
             state.isSending = false
             state.error = TransferMessages.userFacing(error)
+        }
+    }
+
+    /// The challenge, then Face ID. `nil` if either didn't happen; the screen already shows
+    /// why, or has moved to the signing issue.
+    private func approve(_ quote: FXQuote) async -> SignedConfirmation? {
+        let challenge: SigningChallenge
+        let amountMinor: Int64
+        do throws(TransferError) {
+            challenge = try await dependencies.repository.challenge(transferID: transferID)
+            guard let minor = try? quote.sourceAmount.amountMinor() else {
+                throw .invalidData
+            }
+            amountMinor = minor
+        } catch {
+            if error == .sessionExpired {
+                onSessionExpired()
+            }
+            state.error = TransferMessages.userFacing(error)
+            return nil
+        }
+        let payload = ConfirmPayload(
+            transferID: transferID,
+            amountMinor: amountMinor,
+            currency: quote.sourceAmount.currency,
+            recipientID: recipient.id,
+            quoteID: quote.id,
+            nonce: challenge.nonce,
+            timestamp: dependencies.now()
+        )
+        let reason = TransferStrings.approveReason(
+            amount: quote.sourceAmount.formatted(locale: .autoupdatingCurrent), recipient: recipient.name)
+        do throws(SigningError) {
+            return try await dependencies.signer.sign(payload, reason: reason)
+        } catch {
+            switch error {
+            case .cancelled:
+                break
+            case .failed:
+                state.error = TransferMessages.signingFailed
+            case .biometryNotSetUp:
+                router.showSigningIssue(.biometryNotSetUp)
+            case .keyInvalidated:
+                router.showSigningIssue(.keyInvalidated)
+            }
+            return nil
         }
     }
 

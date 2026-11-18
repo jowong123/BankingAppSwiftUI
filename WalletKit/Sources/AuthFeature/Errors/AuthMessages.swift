@@ -22,6 +22,9 @@ enum AuthMessages {
                 title: AuthStrings.sessionExpiredTitle, message: AuthStrings.sessionExpiredMessage, canRetry: false)
         case .storageUnavailable:
             UserFacingError(title: AuthStrings.storageTitle, message: AuthStrings.storageMessage, canRetry: true)
+        case .deviceSetupFailed:
+            UserFacingError(
+                title: AuthStrings.deviceSetupTitle, message: AuthStrings.deviceSetupMessage, canRetry: false)
         case .invalidPIN, .wrongPIN:
             pinError(error)
         case .biometryFailed, .biometryUnavailable, .biometryChanged:

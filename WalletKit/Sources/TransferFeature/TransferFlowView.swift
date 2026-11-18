@@ -8,6 +8,8 @@ import SwiftUI
 ///   - onFinish: Cancel before sending, or Done on the status screen. A transfer already
 ///     sent keeps going in the outbox after the flow closes.
 ///   - onSessionExpired: the server says the session can't be renewed.
+///   - onSignInAgain: this device can't approve transfers (Face ID changed or not set up);
+///     the user chose to sign out and sign in again, which binds a new key.
 public struct TransferFlowView: View {
     @Bindable private var router: TransferRouter
     @State private var recipientsViewModel: RecipientsViewModel
@@ -15,19 +17,22 @@ public struct TransferFlowView: View {
     private let dependencies: TransferDependencies
     private let onFinish: @MainActor () -> Void
     private let onSessionExpired: @MainActor () -> Void
+    private let onSignInAgain: @MainActor () -> Void
 
     public init(
         router: TransferRouter,
         dependencies: TransferDependencies,
         source: Account,
         onFinish: @escaping @MainActor () -> Void,
-        onSessionExpired: @escaping @MainActor () -> Void
+        onSessionExpired: @escaping @MainActor () -> Void,
+        onSignInAgain: @escaping @MainActor () -> Void
     ) {
         self.router = router
         self.dependencies = dependencies
         self.source = source
         self.onFinish = onFinish
         self.onSessionExpired = onSessionExpired
+        self.onSignInAgain = onSignInAgain
         _recipientsViewModel = State(
             initialValue: RecipientsViewModel(
                 source: source,
@@ -40,7 +45,10 @@ public struct TransferFlowView: View {
     public var body: some View {
         NavigationStack(path: $router.path) {
             Group {
-                if let sentID = router.sentTransferID {
+                if let issue = router.signingIssue {
+                    SigningIssueScreen(
+                        issue: issue, dependencies: dependencies, onClose: onFinish, onSignInAgain: onSignInAgain)
+                } else if let sentID = router.sentTransferID {
                     StatusScreen(transferID: sentID, dependencies: dependencies, onFinish: onFinish)
                 } else {
                     RecipientsView(viewModel: recipientsViewModel)
@@ -140,6 +148,26 @@ private struct ReviewScreen: View {
 
     var body: some View {
         ReviewView(viewModel: viewModel)
+    }
+}
+
+private struct SigningIssueScreen: View {
+    @State private var viewModel: SigningIssueViewModel
+    private let onClose: @MainActor () -> Void
+
+    init(
+        issue: SigningAvailability,
+        dependencies: TransferDependencies,
+        onClose: @escaping @MainActor () -> Void,
+        onSignInAgain: @escaping @MainActor () -> Void
+    ) {
+        _viewModel = State(
+            initialValue: SigningIssueViewModel(issue: issue, dependencies: dependencies, onSignInAgain: onSignInAgain))
+        self.onClose = onClose
+    }
+
+    var body: some View {
+        SigningIssueView(viewModel: viewModel, onClose: onClose)
     }
 }
 

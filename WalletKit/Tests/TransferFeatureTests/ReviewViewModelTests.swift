@@ -113,7 +113,10 @@ import Testing
         let viewModel = makeViewModel(repository: repository, outbox: outbox, expiresIn: 1)
 
         async let sending: Void = viewModel.send()
-        await Task.yield()
+        // Approved and handed to the outbox, which is still saving.
+        for _ in 0..<1_000 where await outbox.sent.isEmpty {
+            await Task.yield()
+        }
         clock.advance(2)
         await viewModel.runCountdown()
         await gate.open()

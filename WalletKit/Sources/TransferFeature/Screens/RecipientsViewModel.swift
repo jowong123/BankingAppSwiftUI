@@ -19,6 +19,7 @@ final class RecipientsViewModel {
     private(set) var state = State()
     private let source: Account
     private let repository: any TransfersRepository
+    private let signer: any TransferSigning
     private let router: TransferRouter
     private let onSessionExpired: @MainActor () -> Void
 
@@ -30,12 +31,19 @@ final class RecipientsViewModel {
     ) {
         self.source = source
         self.repository = dependencies.repository
+        self.signer = dependencies.signer
         self.router = router
         self.onSessionExpired = onSessionExpired
     }
 
+    /// A device that can't approve transfers says so first, before the user picks anyone.
     func onAppear() async {
         guard !state.hasLoaded else {
+            return
+        }
+        let availability = await signer.availability()
+        guard availability == .ready else {
+            router.showSigningIssue(availability)
             return
         }
         await load()

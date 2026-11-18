@@ -35,6 +35,8 @@
 "auth.error.unavailable.message" = "Please try again in a moment.";
 "auth.error.sessionExpired.title" = "Session expired";
 "auth.error.sessionExpired.message" = "Sign in again to continue.";
+"auth.error.deviceSetup.title" = "Couldn't set up this iPhone";
+"auth.error.deviceSetup.message" = "Wallet couldn't link this iPhone to your account. Sign in again.";
 "auth.error.storage.title" = "Secure storage is locked";
 "auth.error.storage.message" = "Unlock your phone and try again.";
 "auth.error.invalidPIN.title" = "Check your PIN";

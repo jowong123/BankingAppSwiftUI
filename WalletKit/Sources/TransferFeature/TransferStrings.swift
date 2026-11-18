@@ -106,6 +106,42 @@ enum TransferStrings {
     static var storageMessage: String {
         text("transfer.error.storage.message")
     }
+    static var signingFailedTitle: String {
+        text("transfer.signing.failed.title")
+    }
+    static var signingFailedMessage: String {
+        text("transfer.signing.failed.message")
+    }
+    static var keyInvalidatedTitle: String {
+        text("transfer.signing.keyInvalidated.title")
+    }
+    static var keyInvalidatedMessage: String {
+        text("transfer.signing.keyInvalidated.message")
+    }
+    static var biometryNotSetUpTitle: String {
+        text("transfer.signing.biometryNotSetUp.title")
+    }
+    static var biometryNotSetUpMessage: String {
+        text("transfer.signing.biometryNotSetUp.message")
+    }
+    static var signInAgain: String {
+        text("transfer.signing.signInAgain")
+    }
+    static var close: String {
+        text("transfer.signing.close")
+    }
+    static var pendingSignOutTitle: String {
+        text("transfer.signing.pendingSignOut.title")
+    }
+    static var pendingSignOutMessage: String {
+        text("transfer.signing.pendingSignOut.message")
+    }
+    static var pendingSignOutConfirm: String {
+        text("transfer.signing.pendingSignOut.confirm")
+    }
+    static func approveReason(amount: String, recipient: String) -> String {
+        String(format: text("transfer.review.approveReason"), amount, recipient)
+    }
     static func recipientSubtitle(currency: Currency, last4: String) -> String {
         String(format: text("transfer.recipients.subtitle"), currency.code, last4)
     }
@@ -142,6 +178,8 @@ enum TransferStrings {
         case .quoteExpired, .quoteUsed: "quoteExpired"
         case .insufficientFunds: "insufficientFunds"
         case .declined: "declined"
+        case .approvalExpired: "approvalExpired"
+        case .notApproved: "notApproved"
         case .rejected: "rejected"
         }
     }

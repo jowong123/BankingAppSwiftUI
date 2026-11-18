@@ -129,7 +129,7 @@ import Testing
         // Built from the failure: transfer.status.failed.<kind>.title / .message.
         usedKeys.remove("transfer.status.failed.\\(failureKey(failure)).title")
         usedKeys.remove("transfer.status.failed.\\(failureKey(failure)).message")
-        for kind in ["quoteExpired", "insufficientFunds", "declined", "rejected"] {
+        for kind in ["quoteExpired", "insufficientFunds", "declined", "approvalExpired", "notApproved", "rejected"] {
             usedKeys.insert("transfer.status.failed.\(kind).title")
             usedKeys.insert("transfer.status.failed.\(kind).message")
         }

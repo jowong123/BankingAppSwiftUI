@@ -33,4 +33,10 @@ enum TransferMessages {
             nil
         }
     }
+
+    /// Face ID didn't confirm it was the user. Nothing was sent; Send works again.
+    static var signingFailed: UserFacingError {
+        UserFacingError(
+            title: TransferStrings.signingFailedTitle, message: TransferStrings.signingFailedMessage, canRetry: false)
+    }
 }

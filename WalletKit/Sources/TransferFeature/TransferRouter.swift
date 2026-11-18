@@ -1,3 +1,4 @@
+import Domain
 import Foundation
 import Observation
 import SwiftUI
@@ -10,6 +11,8 @@ public final class TransferRouter {
     /// Set once the transfer is in the outbox. The flow then shows its status in place of
     /// everything before it, so there's no way back to the review screen.
     public private(set) var sentTransferID: UUID?
+    /// Set when this device can't approve transfers. The flow then explains why instead.
+    public private(set) var signingIssue: SigningAvailability?
 
     public init() {}
 
@@ -33,6 +36,11 @@ public final class TransferRouter {
 
     public func dismiss() {
         sheet = nil
+    }
+
+    func showSigningIssue(_ issue: SigningAvailability) {
+        signingIssue = issue
+        path = NavigationPath()
     }
 
     func showStatus(of id: UUID) {

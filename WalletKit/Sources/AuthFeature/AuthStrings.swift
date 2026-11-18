@@ -84,6 +84,12 @@ enum AuthStrings {
     static var sessionExpiredMessage: String {
         text("auth.error.sessionExpired.message")
     }
+    static var deviceSetupTitle: String {
+        text("auth.error.deviceSetup.title")
+    }
+    static var deviceSetupMessage: String {
+        text("auth.error.deviceSetup.message")
+    }
     static var storageTitle: String {
         text("auth.error.storage.title")
     }
