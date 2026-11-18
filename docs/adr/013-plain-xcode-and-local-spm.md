@@ -1,6 +1,6 @@
 # ADR-013: Plain Xcode project + local SPM; Tuist at team scale
 
-- **Status:** Proposed
+- **Status:** Accepted
 - **Date:** 2026-10-24
 - **Related:** SPEC sections 2 and 3, ADR-004
 

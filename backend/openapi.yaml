@@ -21,16 +21,21 @@ info:
       over after 60 s. A failed request (error or 5xx) does not keep the key.
     - Only these error codes mean "rejected, nothing changed": `bad_request`,
       `invalid_request`, `not_found`, `declined`, `quote_expired`, `quote_used`,
-      `insufficient_funds`, `idempotency_key_required`, `idempotency_mismatch`. After any
-      other failure of `POST /v1/transfers`, the client polls `GET /v1/transfers/{id}`.
+      `insufficient_funds`, `idempotency_key_required`, `idempotency_mismatch`, and the
+      approval refusals on `/confirm`: `signature_required`, `invalid_signature`,
+      `payload_mismatch`, `invalid_nonce`, `nonce_used`, `nonce_expired`, `assertion_invalid`,
+      `device_not_bound`. After any other failure of `POST /v1/transfers`, the client polls
+      `GET /v1/transfers/{id}`.
     - Sandbox fault injection, only when the server runs with `SIMULATION_HEADERS=on`:
       `X-Sim-Delay: <ms>` (0...30000) and `X-Sim-Fail: network | server | declined`.
       `network` processes the request and then drops the connection, so the client sees a
       timeout for work that happened.
 
-    Device binding (`/v1/devices`) and transaction signing (`/v1/transfers/{id}/challenge`,
-    a signature on `/confirm`) are added in Phase 7. Until then `/confirm` is unsigned
-    (ADR-022).
+    Device binding and transaction signing (SPEC section 6, ADR-008): login returns a binding
+    token; `POST /v1/devices` binds the device's signing key and starts the session; every
+    `/confirm` that moves money carries a payload signed by that key over a nonce from
+    `/challenge`. App Attest is checked unless the server runs with `ATTEST_MODE=sandbox`
+    (ADR-023, ADR-024).
 servers:
   - url: http://127.0.0.1:8080
     description: Local sandbox (`swift run WalletBackend serve`)
@@ -42,6 +47,9 @@ paths:
   /v1/auth/login:
     post:
       summary: Sandbox login
+      description: |
+        Checks the password only. The binding token works once, within 5 minutes, and only on
+        `POST /v1/devices`; it is never a bearer token.
       security: []
       requestBody:
         required: true
@@ -50,12 +58,37 @@ paths:
             schema: { $ref: "#/components/schemas/LoginRequest" }
       responses:
         "200":
-          description: Session tokens
+          description: Binding token
           content:
             application/json:
-              schema: { $ref: "#/components/schemas/SessionTokens" }
+              schema: { $ref: "#/components/schemas/BindingToken" }
         "401": { $ref: "#/components/responses/Error" }
         "400": { $ref: "#/components/responses/Error" }
+
+  /v1/devices:
+    post:
+      summary: Bind this device and start the session
+      description: |
+        Stores the device's Secure Enclave public key and, unless `ATTEST_MODE=sandbox`, its
+        App Attest key after verifying the attestation. The attestation's client data is
+        `"<bindingToken>.<signingKey>"` (the base64 key as sent, or empty). Everything is
+        checked before the binding token is used up; then the token, the device and the
+        session are written together. Without `signingKey` the device can view but not send.
+        Clients must not retry this call: the token works once.
+      security: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/DeviceBindingRequest" }
+      responses:
+        "200":
+          description: The session, tied to the new device
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/BoundDevice" }
+        "401": { $ref: "#/components/responses/Error" }
+        "422": { $ref: "#/components/responses/Error" }
 
   /v1/auth/refresh:
     post:
@@ -221,20 +254,52 @@ paths:
         "409": { $ref: "#/components/responses/Error" }
         "422": { $ref: "#/components/responses/Error" }
 
-  /v1/transfers/{transferId}/confirm:
+  /v1/transfers/{transferId}/challenge:
     post:
-      summary: Confirm a transfer (moves the money)
+      summary: A nonce to sign for this transfer
       description: |
-        Debits the source account, adds the history row and sets `processing`, in one
-        transaction. Safe to repeat: only an `awaiting_confirmation` transfer changes, and any
-        other status is returned as it is, so no idempotency record is kept. If the balance no
-        longer covers the amount, the transfer becomes `failed` with `insufficient_funds` and
-        nothing is debited. Unsigned until Phase 7 adds the signature (ADR-022).
+        Single use, valid 60 s, for this transfer on this session's device. Asked for when
+        the user taps Send, before the transfer is created: the ID is the client's. Each
+        call issues a new nonce. `device_not_bound` (403) if this device has no signing key.
       parameters:
         - name: transferId
           in: path
           required: true
           schema: { type: string, format: uuid }
+      responses:
+        "201":
+          description: Nonce
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/Challenge" }
+        "401": { $ref: "#/components/responses/Error" }
+        "403": { $ref: "#/components/responses/Error" }
+        "404": { $ref: "#/components/responses/Error" }
+
+  /v1/transfers/{transferId}/confirm:
+    post:
+      summary: Confirm a transfer (moves the money)
+      description: |
+        Verifies the approval, then debits the source account, adds the history row and sets
+        `processing`, in one transaction. The approval: the signature over the payload bytes
+        with this session's device key; every payload field equal to the stored transfer; the
+        nonce issued for this transfer and device, unused and unexpired (it is used up here);
+        and on an attested device an App Attest assertion over the payload with a higher
+        counter. A refused approval changes nothing. Safe to repeat: only an
+        `awaiting_confirmation` transfer changes, and any other status is returned as it is,
+        so a retry needs no fresh approval. If the balance no longer covers the amount, or the
+        quote expired more than 2 minutes ago, the transfer becomes `failed` and nothing is
+        debited.
+      parameters:
+        - name: transferId
+          in: path
+          required: true
+          schema: { type: string, format: uuid }
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/ConfirmRequest" }
       responses:
         "200":
           description: Transfer after the confirm
@@ -242,6 +307,7 @@ paths:
             application/json:
               schema: { $ref: "#/components/schemas/Transfer" }
         "401": { $ref: "#/components/responses/Error" }
+        "403": { $ref: "#/components/responses/Error" }
         "404": { $ref: "#/components/responses/Error" }
         "422": { $ref: "#/components/responses/Error" }
 
@@ -271,7 +337,7 @@ components:
     bearer:
       type: http
       scheme: bearer
-      description: Opaque access token from login or refresh. Valid 15 minutes.
+      description: Opaque access token from device binding or refresh. Valid 15 minutes.
 
   parameters:
     IdempotencyKey:
@@ -354,6 +420,53 @@ components:
       properties:
         refreshToken: { type: string }
 
+    BindingToken:
+      type: object
+      required: [bindingToken, expiresIn]
+      properties:
+        bindingToken: { type: string }
+        expiresIn: { type: integer, description: Seconds (300) }
+    DeviceBindingRequest:
+      type: object
+      required: [bindingToken]
+      properties:
+        bindingToken: { type: string }
+        signingKey:
+          type: string
+          format: byte
+          description: X9.63 P-256 public key from the Secure Enclave. Absent without Face ID or Touch ID.
+        attestation:
+          type: object
+          required: [keyId, object]
+          properties:
+            keyId: { type: string, description: App Attest key identifier (base64) }
+            object: { type: string, format: byte, description: CBOR attestation object }
+    BoundDevice:
+      type: object
+      required: [deviceId, accessToken, refreshToken, expiresIn]
+      properties:
+        deviceId: { type: string }
+        accessToken: { type: string }
+        refreshToken: { type: string }
+        expiresIn: { type: integer }
+    Challenge:
+      type: object
+      required: [nonce, expiresAt]
+      properties:
+        nonce: { type: string }
+        expiresAt: { type: string, format: date-time }
+    ConfirmRequest:
+      type: object
+      required: [payload, signature]
+      properties:
+        payload:
+          type: string
+          format: byte
+          description: |
+            The exact signed bytes: JSON with sorted keys and no whitespace of `amountMinor`,
+            `currency`, `nonce`, `quoteId`, `recipientId`, `timestamp` (Unix ms), `transferId`.
+        signature: { type: string, format: byte, description: DER ECDSA P-256 over SHA-256 of payload }
+        assertion: { type: string, format: byte, description: App Attest assertion over payload (CBOR) }
     SessionTokens:
       type: object
       required: [accessToken, refreshToken, expiresIn]

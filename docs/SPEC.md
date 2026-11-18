@@ -171,7 +171,7 @@ stateDiagram-v2
 | Draft | Recipient and amount chosen | Amount screen |
 | Quoted | Server returns an FX quote | Rate, fee, receive amount, 30 s countdown |
 | Expired | Quote lock passes before confirm | "Rate updated" and the new quote, never a silent change |
-| Authorised | Send tapped and saved (Phase 7: Face ID passes and payload is signed); the create is sent | "Sending", safe to leave the app |
+| Authorised | Send tapped, approved with Face ID and signed (ADR-023), then saved; the create is sent | "Sending", safe to leave the app |
 | Submitted | Signed confirm request sent | Spinner; safe to leave the app |
 | Processing | Server accepted, settlement pending | "On its way" with estimated arrival |
 | Completed | Server reports settled | Success screen and receipt |
@@ -185,29 +185,31 @@ stateDiagram-v2
 
 ## 6. Security design
 
-**Device binding (first login)**
-1. Sandbox login (email + password) returns a short-lived binding token.
-2. App generates a P-256 key in the Secure Enclave with access control `.biometryCurrentSet` + `.privateKeyUsage`.
-3. App runs App Attest and sends public key, attestation object and device ID to `POST /v1/devices`.
-4. Server verifies attestation and stores the public key against user + device.
+**Device binding (every sign-in)**
+1. Sandbox login (email + password) returns a single-use binding token, valid 5 minutes.
+2. App generates a P-256 key in the Secure Enclave with access control `.biometryCurrentSet` + `.privateKeyUsage`. No Face ID or Touch ID: no key; the device can view but not send.
+3. App runs App Attest (client data: binding token + public key) and sends the binding token, public key and attestation to `POST /v1/devices`.
+4. Server verifies the attestation, stores the public key against user + device, and issues session tokens tied to that device (ADR-008, ADR-024).
 
-**Transaction signing (every transfer)**
-1. `POST /v1/transfers/{id}/challenge` returns a single-use nonce valid 60 s.
+**Transaction signing (every transfer, at the Send tap, ADR-023)**
+1. `POST /v1/transfers/{id}/challenge` for the app's own transfer ID, before the create, returns a single-use nonce valid 60 s.
 2. App builds a canonical payload: transfer ID, amountMinor, currency, recipient ID, quote ID, nonce, timestamp (sorted-key JSON, no whitespace).
-3. Face ID unlocks the key; app signs SHA-256 of the payload with ECDSA.
-4. App sends payload + signature to `POST /v1/transfers/{id}/confirm`.
-5. Server verifies signature, nonce freshness and single use, and that the payload matches the stored transfer.
+3. Face ID unlocks the key; app signs SHA-256 of the payload with ECDSA, and adds an App Attest assertion over the same bytes.
+4. The outbox saves the signed approval, creates the transfer, and sends the payload bytes + signature + assertion to `POST /v1/transfers/{id}/confirm`, unchanged on every retry.
+5. Server verifies the signature with the session's device key, that the payload matches the stored transfer, the nonce (issued for this transfer and device, unexpired, used up now) and the assertion counter. A refusal changes nothing.
 
-Biometric enrolment change invalidates the key (`.biometryCurrentSet`); the user must re-bind. Explain this in the UI.
+The simulator has no Secure Enclave or App Attest: it signs with a key it generates itself behind the same Face ID rules, and the server skips App Attest only when started with `ATTEST_MODE=sandbox` (ADR-023).
+
+Biometric enrolment change invalidates the key (`.biometryCurrentSet`); the user must re-bind. The app explains this when Send money opens and offers "Sign in again", which binds a new key.
 
 **Storage**
-- Keychain (`kSecAttrAccessibleWhenUnlockedThisDeviceOnly`): access token, refresh token, device ID, and the app PIN's salted PBKDF2 hash with its attempts left (ADR-019).
-- Secure Enclave: signing private key, never exported.
+- Keychain (`kSecAttrAccessibleWhenUnlockedThisDeviceOnly`): access token, refresh token, device ID and App Attest key ID, the Face ID enrolment the signing key was made under, and the app PIN's salted PBKDF2 hash with its attempts left (ADR-019).
+- Secure Enclave: signing private key, never exported. The Keychain holds only CryptoKit's handle to it, usable on this device's Secure Enclave alone.
 - SwiftData: `.complete` file protection; the transfer outbox only. Balances and transactions are never stored on the device (ADR-017).
 - Never: UserDefaults for sensitive data, secrets in source, PII in logs.
 
 **Network**
-- TLS public-key pinning (SPKI hash) with a backup pin (ADR-006).
+- TLS public-key pinning (SPKI hash) with a backup pin (ADR-006), from `WalletAPIPins` in Info.plist. An https host with no pins fails closed; a pin mismatch is reported as such, never as a cancel.
 - `Idempotency-Key` on every mutating call; request ID on every call.
 - 401 → one token refresh. If the server refuses the refresh token, the session is signed out and wiped (not just locked): the tokens are no longer valid.
 
@@ -229,7 +231,8 @@ Biometric enrolment change invalidates the key (`.biometryCurrentSet`); the user
 | Data leak | Account number in a crash report | OSLog `.private`, Sentry scrubbing, `print` banned |
 | Biometric change | Attacker adds a fingerprint | App unlock: Face ID refused until the PIN is entered (ADR-019). Signing key invalidated; re-binding required |
 | Token resurrection | A refresh finishing after sign-out restores the old session | Session generation counter drops late results (`SessionStore`) |
-| Unsigned confirm (Phase 6 only) | A stolen access token confirms a transfer | Sandbox with fake money; Phase 7 makes the signed payload mandatory (ADR-022) |
+| Stolen access token | Token lifted from a proxy log confirms a transfer | Confirm needs a Secure Enclave signature behind Face ID and a fresh nonce (ADR-008) |
+| Tampered amount | Request rewritten to send more than the user saw | Amount is in the signed payload; server compares it with the stored transfer |
 | Outbox read from a locked phone | Device seized while a transfer is pending | `.complete` file protection, excluded from backups, deleted at sign-out (ADR-009) |
 | Copied token after sign-out | Token lifted from a backup or proxy log is used later | Sign-out, five wrong PINs and a reinstall revoke the session on the server (`POST /v1/auth/logout`, best effort) |
 
@@ -239,17 +242,17 @@ Small Vapor service in `backend/`, Fluent SQLite, seeded fake accounts, simulate
 
 | Method | Path | Purpose | Notes |
 | --- | --- | --- | --- |
-| POST | `/v1/auth/login` | Sandbox login | Binding token or session tokens |
+| POST | `/v1/auth/login` | Sandbox login | Single-use binding token (5 min) |
 | POST | `/v1/auth/refresh` | Refresh access token | Rotates refresh token |
 | POST | `/v1/auth/logout` | Sign out | Revokes the session's tokens; always 204 |
-| POST | `/v1/devices` | Bind device | Public key + attestation |
+| POST | `/v1/devices` | Bind device | Binding token + public key + attestation; returns session tokens tied to the device |
 | GET | `/v1/accounts` | Balances per currency | Minor units |
 | GET | `/v1/accounts/{id}/transactions` | History | Cursor pagination |
 | GET | `/v1/recipients` | Saved payees | |
 | POST | `/v1/quotes` | FX quote | Rate, fee, receive amount, `expiresAt` (30 s) |
 | POST | `/v1/transfers` | Create from quote | Requires `Idempotency-Key` |
-| POST | `/v1/transfers/{id}/challenge` | Signing nonce | Single use, 60 s |
-| POST | `/v1/transfers/{id}/confirm` | Moves the money | Unsigned until Phase 7 (ADR-022); then verifies signature + assertion. Safe to repeat. Fails `quote_expired` more than 2 min after the quote expired |
+| POST | `/v1/transfers/{id}/challenge` | Signing nonce | Single use, 60 s, per transfer and device; asked for before the create |
+| POST | `/v1/transfers/{id}/confirm` | Moves the money | Verifies signature, payload, nonce and assertion (ADR-008). Safe to repeat. Fails `quote_expired` more than 2 min after the quote expired |
 | GET | `/v1/transfers/{id}` | Status | Polled while pending. Sandbox settles 3 s after confirm; `rcp_decline_eur` is declined and refunded |
 
 **Conventions**
@@ -305,7 +308,9 @@ Template: `docs/adr/000-template.md`.
 | 019 | App PIN checked on device: PBKDF2 hash in Keychain, 5 attempts then wipe | Device passcode fallback; server-verified PIN |
 | 020 | App root swapped from `SessionState` by `AppCoordinator` | One navigation stack; lock screen as a full-screen cover |
 | 021 | Backend URL per build configuration in Info.plist | Swift constant behind `#if DEBUG`; xcconfig variable |
-| 022 | Unsigned confirm until Phase 7; outbox recovery rule | Stop at "created"; a stub signature |
+| 022 | Unsigned confirm until Phase 7 (superseded by 008); outbox recovery rule | Stop at "created"; a stub signature |
+| 023 | Sign at the Send tap; simulator signs with a self-generated key, server `ATTEST_MODE=sandbox` | Sign when the outbox confirms; a fixed demo key |
+| 024 | App Attest verified on the server with swift-certificates | Third-party App Attest package; DeviceCheck only |
 
 ## 10. Build plan (10 weeks)
 
@@ -345,6 +350,8 @@ Run each phase with `/phase <n>`. Review every diff before committing.
 - Done when: backend rejects tampered amount, reused nonce, expired nonce; changing Face ID enrolment forces re-binding.
 - Carried over from Phase 6: make the signature mandatory on `/confirm` (ADR-022) and re-authenticate Send through the signing key's Face ID prompt. Write ADR-011 (state machine + outbox) if it should be separate from ADR-009 and ADR-022.
 - Carried over from the Phase 3 review: the client checks that a quote matches what was asked, but trusts the server's maths (`target = round((source − fee) × rate)`, fee below source, expiry in the future). Decide whether the signed quote covers this or the client re-checks it. A pinning failure must not be reported as a user cancel: `URLSessionTransport` currently maps every `URLError.cancelled` to `CancellationError`.
+- Decisions: ADR-006 (pinning), ADR-008 (signing), ADR-023 (sign at Send; simulator key and `ATTEST_MODE=sandbox`), ADR-024 (App Attest with swift-certificates). Every sign-in binds the device; no Face ID binds without a key (view only). An approval older than 60 s fails the transfer as "approval expired". The client re-checks the quote's maths (`FXQuote.addsUp`). ADR-011 isn't written: ADR-009 and ADR-022 cover the outbox. UI tests use a mock signer (`-signing keyInvalidated|biometryNotSetUp` for the explanation screen).
+- Carried to Phase 9: fill the Release pins once a server exists; use the App Attest receipt's risk metric; turn on the App Attest capability for TestFlight.
 
 ### Phase 8 (week 8): IdentitySDK
 - Task: Standalone package: MRZ input, BAC/PACE, read DG1 + DG2, passive authentication. Async public API, typed errors, DocC tutorial, sample app. Wire into OnboardingFeature.

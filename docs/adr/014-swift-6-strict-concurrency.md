@@ -1,6 +1,6 @@
 # ADR-014: Swift 6 strict concurrency everywhere
 
-- **Status:** Proposed
+- **Status:** Accepted
 - **Date:** 2026-10-24
 - **Related:** SPEC sections 2 and 4, ADR-004, ADR-013
 

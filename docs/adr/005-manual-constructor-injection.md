@@ -1,6 +1,6 @@
 # ADR-005: Manual constructor injection from one composition root
 
-- **Status:** Proposed
+- **Status:** Accepted
 - **Date:** 2026-11-08
 - **Related:** SPEC sections 2 and 4, ADR-002, ADR-004
 

@@ -1,6 +1,6 @@
 # ADR-022: Unsigned confirm until Phase 7, and the outbox recovery rule
 
-- **Status:** Proposed
+- **Status:** Accepted. The unsigned confirm is superseded by ADR-008 (Phase 7); the recovery rule stands.
 - **Date:** 2026-11-09
 - **Related:** SPEC sections 5, 6, 7 and 10, ADR-009, ADR-011, ADR-016
 

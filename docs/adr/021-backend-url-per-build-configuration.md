@@ -1,6 +1,6 @@
 # ADR-021: Backend URL set per build configuration in Info.plist
 
-- **Status:** Proposed
+- **Status:** Accepted
 - **Date:** 2026-11-08
 - **Related:** SPEC sections 2 and 7, ADR-005, ADR-018
 

@@ -1,6 +1,6 @@
 # ADR-020: The app root follows the session state
 
-- **Status:** Proposed
+- **Status:** Accepted
 - **Date:** 2026-11-08
 - **Related:** SPEC sections 4 and 6, ADR-002, ADR-003, ADR-019
 

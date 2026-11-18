@@ -1,6 +1,6 @@
 # ADR-009: SwiftData outbox with `.complete` file protection
 
-- **Status:** Proposed
+- **Status:** Accepted
 - **Date:** 2026-11-09
 - **Related:** SPEC sections 2, 4, 5 and 6, ADR-011, ADR-017, ADR-022
 
