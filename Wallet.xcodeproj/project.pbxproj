@@ -436,8 +436,9 @@
 				CURRENT_PROJECT_VERSION = 1;
 				ENABLE_PREVIEWS = YES;
 				GENERATE_INFOPLIST_FILE = YES;
+				CODE_SIGN_ENTITLEMENTS = "Config/Wallet-Debug.entitlements";
 				INFOPLIST_FILE = "Config/Wallet-Debug.plist";
-				INFOPLIST_KEY_NSFaceIDUsageDescription = "Wallet uses Face ID to unlock the app.";
+				INFOPLIST_KEY_NSFaceIDUsageDescription = "Wallet uses Face ID to unlock the app and approve transfers.";
 				INFOPLIST_KEY_UIApplicationSceneManifest_Generation = YES;
 				INFOPLIST_KEY_UIApplicationSupportsIndirectInputEvents = YES;
 				INFOPLIST_KEY_UILaunchScreen_Generation = YES;
@@ -467,8 +468,9 @@
 				CURRENT_PROJECT_VERSION = 1;
 				ENABLE_PREVIEWS = YES;
 				GENERATE_INFOPLIST_FILE = YES;
+				CODE_SIGN_ENTITLEMENTS = "Config/Wallet-Release.entitlements";
 				INFOPLIST_FILE = "Config/Wallet-Release.plist";
-				INFOPLIST_KEY_NSFaceIDUsageDescription = "Wallet uses Face ID to unlock the app.";
+				INFOPLIST_KEY_NSFaceIDUsageDescription = "Wallet uses Face ID to unlock the app and approve transfers.";
 				INFOPLIST_KEY_UIApplicationSceneManifest_Generation = YES;
 				INFOPLIST_KEY_UIApplicationSupportsIndirectInputEvents = YES;
 				INFOPLIST_KEY_UILaunchScreen_Generation = YES;

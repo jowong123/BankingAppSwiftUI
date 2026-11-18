@@ -24,7 +24,9 @@ import Testing
         let quote = try await bank.quote(
             sourceAmount: Money(amountMinor: 10_000, currency: .sgd), targetCurrency: .usd)
         _ = try await outbox.send(
-            TransferDraft(id: UUID(), quote: quote, recipient: MockBank.recipients[0], sourceAccountID: "acc_sgd"))
+            TransferDraft(
+                id: UUID(), quote: quote, recipient: MockBank.recipients[0], sourceAccountID: "acc_sgd",
+                confirmation: approval))
 
         let folder = try FileManager.default.attributesOfItem(atPath: directory.path())
         let store = try FileManager.default.attributesOfItem(atPath: directory.appending(path: "outbox.store").path())
@@ -41,7 +43,9 @@ import Testing
         let quote = try await bank.quote(
             sourceAmount: Money(amountMinor: 10_000, currency: .sgd), targetCurrency: .usd)
         _ = try await outbox.send(
-            TransferDraft(id: UUID(), quote: quote, recipient: MockBank.recipients[0], sourceAccountID: "acc_sgd"))
+            TransferDraft(
+                id: UUID(), quote: quote, recipient: MockBank.recipients[0], sourceAccountID: "acc_sgd",
+                confirmation: approval))
 
         let backup = try directory.resourceValues(forKeys: [.isExcludedFromBackupKey])
         await outbox.removeAll()
@@ -65,7 +69,8 @@ import Testing
         let bank = MockBank(settleDelay: 0)
         let quote = try await bank.quote(sourceAmount: Money(amountMinor: 10_000, currency: .sgd), targetCurrency: .usd)
         let draft = TransferDraft(
-            id: UUID(), quote: quote, recipient: MockBank.recipients[0], sourceAccountID: "acc_sgd")
+            id: UUID(), quote: quote, recipient: MockBank.recipients[0], sourceAccountID: "acc_sgd",
+            confirmation: approval)
 
         #expect(await bank.create(draft) == .awaitingConfirmation)
         #expect(await bank.confirm(draft.id) == .processing)
@@ -82,5 +87,37 @@ import Testing
         await #expect(throws: TransferError.amountNotAllowed) {
             try await MockBank().quote(sourceAmount: Money(amountMinor: 100, currency: .sgd), targetCurrency: .usd)
         }
+    }
+}
+
+/// A stand-in approval; these tests are about storage and the mock bank, not signatures.
+private let approval = SignedConfirmation(payload: Data("p".utf8), signature: Data("s".utf8), assertion: nil)
+
+/// TLS pins from Info.plist (ADR-006): only 32-byte SHA-256 values count.
+@Suite struct PinConfigurationTests {
+    @Test func primaryAndBackupPinsAreKept() {
+        let pins = [Data(repeating: 7, count: 32), Data(repeating: 8, count: 32)]
+
+        let values = pins.map {
+            $0.base64EncodedString()
+        }
+
+        #expect(AppEnvironment.pins(from: ["WalletAPIPins": values]) == Set(pins))
+    }
+
+    /// A typo in one pin, or no backup, would turn the next key rotation into an outage: no
+    /// pins at all, so it fails now and is noticed.
+    @Test(arguments: [
+        ["not base64!", Data(repeating: 7, count: 32).base64EncodedString()],
+        [Data(repeating: 1, count: 20).base64EncodedString(), Data(repeating: 7, count: 32).base64EncodedString()],
+        [Data(repeating: 7, count: 32).base64EncodedString()],
+    ])
+    func malformedOrSinglePinGivesNone(values: [String]) {
+        #expect(AppEnvironment.pins(from: ["WalletAPIPins": values]).isEmpty)
+    }
+
+    @Test func missingPinsAreEmptySoHTTPSFailsClosed() {
+        #expect(AppEnvironment.pins(from: [:]).isEmpty)
+        #expect(AppEnvironment.pins(from: nil).isEmpty)
     }
 }

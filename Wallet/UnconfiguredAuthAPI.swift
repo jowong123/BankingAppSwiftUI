@@ -3,7 +3,11 @@ import Domain
 /// Used only if the build has no valid `WalletAPIBaseURL`: sign-in reports the service as
 /// unavailable, so a misconfigured build fails closed instead of guessing a server.
 struct UnconfiguredAuthAPI: AuthAPI {
-    func login(email: String, password: String) async throws(AuthError) -> SessionTokens {
+    func login(email: String, password: String) async throws(AuthError) -> BindingToken {
+        throw .unavailable
+    }
+
+    func bindDevice(_ request: DeviceBindingRequest) async throws(AuthError) -> BoundSession {
         throw .unavailable
     }
 

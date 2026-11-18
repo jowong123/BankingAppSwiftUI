@@ -6,5 +6,10 @@
 	     build fails closed instead of talking to an unknown host. -->
 	<key>WalletAPIBaseURL</key>
 	<string>https://api.wallet.invalid</string>
+	<!-- TLS key pins (ADR-006): base64 SHA-256 of the server's SubjectPublicKeyInfo, the
+	     current key and a backup key kept offline. Empty until the Phase 9 server exists,
+	     and an https host with no pins fails closed. -->
+	<key>WalletAPIPins</key>
+	<array/>
 </dict>
 </plist>

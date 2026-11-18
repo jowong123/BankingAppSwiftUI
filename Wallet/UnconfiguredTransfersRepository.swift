@@ -1,4 +1,5 @@
 import Domain
+import Foundation
 
 /// Used only if the build has no valid `WalletAPIBaseURL`: nothing can be quoted, so no
 /// transfer can start, and the screens say the service can't be reached.
@@ -8,6 +9,10 @@ struct UnconfiguredTransfersRepository: TransfersRepository {
     }
 
     func quote(sourceAmount: Money, targetCurrency: Currency) async throws(TransferError) -> FXQuote {
+        throw .unavailable
+    }
+
+    func challenge(transferID: UUID) async throws(TransferError) -> SigningChallenge {
         throw .unavailable
     }
 }

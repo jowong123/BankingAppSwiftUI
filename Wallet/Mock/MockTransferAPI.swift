@@ -13,7 +13,9 @@
             return await bank.create(draft)
         }
 
-        func confirm(id: UUID) async throws(TransferAPIError) -> RemoteTransferStatus {
+        /// The mock bank trusts the approval; signature checks live in the backend's tests.
+        func confirm(id: UUID, confirmation: SignedConfirmation) async throws(TransferAPIError) -> RemoteTransferStatus
+        {
             try await simulateNetwork()
             return await bank.confirm(id)
         }

@@ -95,7 +95,8 @@ final class FakeFirstLaunch: FirstLaunchMarker {
             linkedModules: mock.linkedModules,
             session: mock.session,
             accounts: mock.accounts,
-            transfers: TransferDependencies(repository: mock.transfers.repository, outbox: outbox),
+            transfers: TransferDependencies(
+                repository: mock.transfers.repository, outbox: outbox, signer: mock.transfers.signer),
             outbox: outbox,
             autoLock: mock.autoLock,
             firstLaunch: firstLaunch,
@@ -310,6 +311,22 @@ final class FakeFirstLaunch: FirstLaunchMarker {
         coordinator.transferFinished()
         #expect(coordinator.transfer == nil)
         #expect(coordinator.accountsReload == 1)
+    }
+
+    /// Face ID changed: the flow closes and the user signs in again, which binds a new key.
+    @Test func signInAgainClosesTheFlowAndSignsOut() async throws {
+        let coordinator = try await signedIn()
+        coordinator.sendMoney(
+            from: Account(id: "acc_sgd", balance: Money(amountMinor: 100, currency: .sgd), updatedAt: .now))
+
+        coordinator.signInAgain()
+        for _ in 0..<1_000 where coordinator.root != .signIn(nil) {
+            await Task.yield()
+        }
+
+        #expect(coordinator.transfer == nil)
+        #expect(coordinator.root == .signIn(nil))
+        #expect(await coordinator.authDependencies.session.currentState() == .signedOut)
     }
 
     /// Locking takes the flow down with the balances; the outbox keeps the transfer going.

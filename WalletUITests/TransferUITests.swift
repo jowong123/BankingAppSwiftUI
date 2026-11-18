@@ -1,7 +1,8 @@
 import XCTest
 
 /// Phase 6 "done when": one transfer per double tap, a visible re-quote, and a transfer that
-/// survives the app being killed. Runs on the in-app mock bank (`-mockServer`).
+/// survives the app being killed. Phase 7: a device that can no longer sign says why. Runs on
+/// the in-app mock bank (`-mockServer`), whose signer approves without a Face ID prompt.
 final class TransferUITests: XCTestCase {
     override func setUpWithError() throws {
         continueAfterFailure = false
@@ -76,6 +77,26 @@ final class TransferUITests: XCTestCase {
         // Leave no session behind for the next test.
         relaunched.terminate()
         launchApp(["-keepMockSession", "-resetSession"]).terminate()
+    }
+
+    /// Phase 7: Face ID changed since sign-in. Send money explains why it can't go ahead, and
+    /// "Sign in again" leads back to sign-in, where a new key is made (SPEC section 6).
+    @MainActor
+    func testChangedFaceIDExplainsAndLeadsToSignIn() throws {
+        let app = launchApp(["-signing", "keyInvalidated"])
+        signIn(app)
+        let card = app.buttons["accounts.card.acc_sgd"]
+        XCTAssertTrue(card.waitForExistence(timeout: 10))
+        card.tap()
+        app.buttons["account.sendMoney"].tap()
+
+        let title = app.staticTexts["transfer.signing.title"]
+        XCTAssertTrue(title.waitForExistence(timeout: 10))
+        XCTAssertEqual(title.label, "Face ID has changed")
+        XCTAssertFalse(app.buttons["transfer.recipient.rcp_alice_usd"].exists)
+        app.buttons["transfer.signing.signInAgain"].tap()
+
+        XCTAssertTrue(app.textFields["auth.email"].waitForExistence(timeout: 10))
     }
 
     // MARK: - Helpers

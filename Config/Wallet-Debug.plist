@@ -5,6 +5,9 @@
 	<!-- The sandbox backend on this Mac (`swift run WalletBackend serve` in backend/). -->
 	<key>WalletAPIBaseURL</key>
 	<string>http://127.0.0.1:8080</string>
+	<!-- Plain http has no TLS, so nothing to pin (ADR-006). -->
+	<key>WalletAPIPins</key>
+	<array/>
 	<!-- Debug only (ADR-018): plain http to local addresses, for the sandbox backend.
 	     Release has no exception; every other host still needs HTTPS. -->
 	<key>NSAppTransportSecurity</key>

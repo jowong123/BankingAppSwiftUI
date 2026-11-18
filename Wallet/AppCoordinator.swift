@@ -111,6 +111,17 @@ final class AppCoordinator {
         accountsReload += 1
     }
 
+    /// From TransferFeature when this device can't approve transfers (Face ID changed or
+    /// not set up). Signing out, then in, binds a new key (SPEC section 6). The flow has
+    /// already asked if a transfer was still sending.
+    func signInAgain() {
+        transfer = nil
+        expiryTask?.cancel()
+        expiryTask = Task {
+            apply(await environment.session.signOut())
+        }
+    }
+
     /// From AuthFeature after sign-in, PIN creation, unlock or sign-out.
     func sessionChanged(_ state: SessionState) {
         apply(state)
@@ -313,6 +324,9 @@ struct AppRootView: View {
                     },
                     onSessionExpired: {
                         coordinator.sessionExpired()
+                    },
+                    onSignInAgain: {
+                        coordinator.signInAgain()
                     }
                 )
             }

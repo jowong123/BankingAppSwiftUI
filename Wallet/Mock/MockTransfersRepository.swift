@@ -17,6 +17,11 @@
             return try await bank.quote(sourceAmount: sourceAmount, targetCurrency: targetCurrency)
         }
 
+        func challenge(transferID: UUID) async throws(TransferError) -> SigningChallenge {
+            try await simulateNetwork()
+            return SigningChallenge(nonce: UUID().uuidString, expiresAt: Date().addingTimeInterval(60))
+        }
+
         private func simulateNetwork() async throws(TransferError) {
             do {
                 try await Task.sleep(for: delay)

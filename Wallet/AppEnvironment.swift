@@ -38,7 +38,11 @@ struct AppEnvironment: Sendable {
     }
 
     /// The backend comes from `WalletAPIBaseURL` in the build's Info.plist
-    /// (`Config/Wallet-Debug.plist`, `Config/Wallet-Release.plist`).
+    /// (`Config/Wallet-Debug.plist`, `Config/Wallet-Release.plist`), its TLS pins from
+    /// `WalletAPIPins` (ADR-006).
+    ///
+    /// The signing key is the Secure Enclave's on a phone. The simulator has none, so it gets
+    /// `SoftwareKey`: a key it generates itself, behind the same Face ID rules (ADR-023).
     ///
     /// Debug launch arguments, used by UI tests (SPEC section 8):
     /// - `-mockServer`: in-memory sign-in, storage and accounts; no backend needed.
@@ -47,6 +51,7 @@ struct AppEnvironment: Sendable {
     /// - `-resetSession`: sign out at launch.
     /// - `-quoteSeconds <n>`: quotes hold n seconds instead of 30. `-transferDelay <n>`: each
     ///   transfer call takes n seconds. `-keepMockSession`: the mock session survives a relaunch.
+    /// - `-signing keyInvalidated|biometryNotSetUp`: the mock device can't approve transfers.
     static func live(
         arguments: [String] = ProcessInfo.processInfo.arguments,
         info: [String: Any]? = Bundle.main.infoDictionary
@@ -60,31 +65,34 @@ struct AppEnvironment: Sendable {
             let resetSession = false
         #endif
         let store = KeychainStore(service: keychainService)
+        let device = Device(store: store)
         guard let baseURL = baseURL(from: info) else {
-            let session = SessionStore(api: UnconfiguredAuthAPI(), store: store, biometrics: DeviceBiometrics())
             return make(
                 services: Services(
-                    session: session,
+                    session: device.session(api: UnconfiguredAuthAPI()),
                     accounts: UnconfiguredAccountsRepository(),
                     transfers: UnconfiguredTransfersRepository(),
-                    outbox: outbox(named: outboxFolder, api: UnconfiguredTransferAPI())
+                    outbox: outbox(named: outboxFolder, api: UnconfiguredTransferAPI()),
+                    signer: device.signer
                 ),
                 autoLock: autoLockPolicy(arguments),
                 firstLaunch: DefaultsFirstLaunchMarker(),
                 resetSession: resetSession
             )
         }
-        let session = SessionStore(api: RemoteAuthAPI(baseURL: baseURL), store: store, biometrics: DeviceBiometrics())
+        let pins = pins(from: info)
+        let session = device.session(api: RemoteAuthAPI(baseURL: baseURL, pins: pins))
         // One client for every feature: one AuthInterceptor, so one refresh at a time. Two
         // would refresh in parallel with the same rotating token and sign the user out
         // (ADR-016). The transfer calls take this same `api`.
-        let api = WalletAPI(baseURL: baseURL, tokens: session)
+        let api = WalletAPI(baseURL: baseURL, tokens: session, pins: pins)
         return make(
             services: Services(
                 session: session,
                 accounts: RemoteAccountsRepository(api: api),
                 transfers: RemoteTransfersRepository(api: api),
-                outbox: outbox(named: outboxFolder, api: RemoteTransferAPI(api: api))
+                outbox: outbox(named: outboxFolder, api: RemoteTransferAPI(api: api)),
+                signer: device.signer
             ),
             autoLock: autoLockPolicy(arguments),
             firstLaunch: DefaultsFirstLaunchMarker(),
@@ -104,6 +112,49 @@ struct AppEnvironment: Sendable {
         )
     }
 
+    /// Base64 SHA-256 SPKI hashes: the current key and at least one backup (ADR-006). A
+    /// malformed entry, or fewer than two, gives no pins at all, so an https host fails closed
+    /// at once rather than at the next key rotation.
+    static func pins(from info: [String: Any]?) -> Set<Data> {
+        let values = info?["WalletAPIPins"] as? [String] ?? []
+        let pins = values.compactMap {
+            Data(base64Encoded: $0)
+        }
+        .filter {
+            $0.count == 32
+        }
+        guard pins.count == values.count, Set(pins).count >= 2 else {
+            return []
+        }
+        return Set(pins)
+    }
+
+    /// The device's signing key and App Attest, shared by the session (which makes the key
+    /// at sign-in) and the signer (which uses it on Send).
+    private struct Device {
+        let store: any SecureStore
+        let key: any DeviceKey
+        let attestor: any AppAttesting
+
+        init(store: any SecureStore) {
+            self.store = store
+            #if targetEnvironment(simulator)
+                key = SoftwareKey(store: store, biometrics: DeviceBiometrics())
+            #else
+                key = SecureEnclaveKey(store: store, biometrics: DeviceBiometrics())
+            #endif
+            attestor = DeviceAppAttest()
+        }
+
+        var signer: any TransferSigning {
+            TransferSigner(key: key, attestor: attestor, store: store)
+        }
+
+        func session(api: any AuthAPI) -> SessionStore {
+            SessionStore(api: api, store: store, biometrics: DeviceBiometrics(), deviceKey: key, attestor: attestor)
+        }
+    }
+
     static func baseURL(from info: [String: Any]?) -> URL? {
         guard let text = info?["WalletAPIBaseURL"] as? String, let url = URL(string: text), url.host() != nil
         else {
@@ -118,6 +169,7 @@ struct AppEnvironment: Sendable {
         let accounts: any AccountsRepository
         let transfers: any TransfersRepository
         let outbox: any TransferOutboxing
+        let signer: any TransferSigning
     }
 
     private static func make(
@@ -142,7 +194,8 @@ struct AppEnvironment: Sendable {
             ],
             session: services.session,
             accounts: AccountsDependencies(repository: services.accounts),
-            transfers: TransferDependencies(repository: services.transfers, outbox: services.outbox),
+            transfers: TransferDependencies(
+                repository: services.transfers, outbox: services.outbox, signer: services.signer),
             outbox: services.outbox,
             autoLock: autoLock,
             firstLaunch: firstLaunch,
@@ -175,19 +228,38 @@ struct AppEnvironment: Sendable {
                 ? KeychainStore(service: "jw.Wallet.uitest") : InMemorySecureStore()
             return make(
                 services: Services(
-                    session: SessionStore(api: MockAuthAPI(), store: store, biometrics: NoBiometrics()),
+                    // No biometrics, so the session binds without a key; `MockSigner` signs.
+                    session: SessionStore(
+                        api: MockAuthAPI(),
+                        store: store,
+                        biometrics: NoBiometrics(),
+                        deviceKey: SoftwareKey(store: store, biometrics: NoBiometrics()),
+                        attestor: MockSigner.NoAppAttest()
+                    ),
                     accounts: MockAccountsRepository(
                         bank: bank,
                         isOffline: arguments.contains("-simulateOffline"),
                         delay: delay
                     ),
                     transfers: MockTransfersRepository(bank: bank, delay: delay),
-                    outbox: outbox(named: "Outbox-Mock", api: MockTransferAPI(bank: bank, delay: transferDelay))
+                    outbox: outbox(named: "Outbox-Mock", api: MockTransferAPI(bank: bank, delay: transferDelay)),
+                    signer: MockSigner(availability: signingAvailability(arguments))
                 ),
                 autoLock: autoLockPolicy(arguments),
                 firstLaunch: nil,
                 resetSession: arguments.contains("-resetSession")
             )
+        }
+
+        private static func signingAvailability(_ arguments: [String]) -> SigningAvailability {
+            guard let index = arguments.firstIndex(of: "-signing"), index + 1 < arguments.count else {
+                return .ready
+            }
+            switch arguments[index + 1] {
+            case "keyInvalidated": return .keyInvalidated
+            case "biometryNotSetUp": return .biometryNotSetUp
+            default: return .ready
+            }
         }
 
         private static func number(after flag: String, in arguments: [String]) -> Int? {

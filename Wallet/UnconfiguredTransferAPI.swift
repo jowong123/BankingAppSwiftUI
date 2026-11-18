@@ -8,7 +8,7 @@ struct UnconfiguredTransferAPI: TransferAPI {
         throw .outcomeUnknown
     }
 
-    func confirm(id: UUID) async throws(TransferAPIError) -> RemoteTransferStatus {
+    func confirm(id: UUID, confirmation: SignedConfirmation) async throws(TransferAPIError) -> RemoteTransferStatus {
         throw .outcomeUnknown
     }
 
