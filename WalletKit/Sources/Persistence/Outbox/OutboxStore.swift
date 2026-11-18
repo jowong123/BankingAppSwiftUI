@@ -86,7 +86,7 @@ extension OutboxStore {
             values.isExcludedFromBackup = true
             try directory.setResourceValues(values)
             configuration = ModelConfiguration(schema: schema, url: directory.appending(path: "outbox.store"))
-        } else {    
+        } else {
             configuration = ModelConfiguration(schema: schema, isStoredInMemoryOnly: true)
         }
         return OutboxStore(modelContainer: try ModelContainer(for: schema, configurations: [configuration]))

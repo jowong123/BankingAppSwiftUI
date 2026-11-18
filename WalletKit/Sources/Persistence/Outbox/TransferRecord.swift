@@ -4,8 +4,8 @@ import SwiftData
 
 /// One outbox row. Flat columns rather than nested `Codable` values, so a later change to a
 /// Domain type can't silently change what is stored. Holds what the status screen and the
-/// server calls need: amounts, rate, the recipient's name and last four digits. No tokens,
-/// no full account numbers.
+/// server calls need: amounts, rate, the recipient's name and last four digits, and the
+/// signed approval the confirm sends. No tokens, no keys, no full account numbers.
 @Model
 final class TransferRecord {
     @Attribute(.unique) var id: UUID
@@ -24,6 +24,13 @@ final class TransferRecord {
     var recipientName: String
     var recipientLast4: String
     var sourceAccountID: String
+    /// The signed approval (Phase 7): single use, valid 60 s, and not a key, so it may sit in
+    /// the protected store (ADR-009). Optional only so a store from Phase 6 still opens. A
+    /// row without one can't be read back; it can't be pending for long either, because a
+    /// Phase 6 session has no bound device, is wiped at launch, and the outbox with it.
+    var confirmationPayload: Data?
+    var confirmationSignature: Data?
+    var confirmationAssertion: Data?
     var createdAt: Date
     var updatedAt: Date
 
@@ -45,6 +52,9 @@ final class TransferRecord {
         recipientName = draft.recipient.name
         recipientLast4 = draft.recipient.accountLast4
         sourceAccountID = draft.sourceAccountID
+        confirmationPayload = draft.confirmation.payload
+        confirmationSignature = draft.confirmation.signature
+        confirmationAssertion = draft.confirmation.assertion
         createdAt = transfer.createdAt
         updatedAt = transfer.updatedAt
     }
@@ -55,13 +65,15 @@ final class TransferRecord {
         updatedAt = transfer.updatedAt
     }
 
-    /// `nil` when the row can't be read back (an unknown currency or state).
+    /// `nil` when the row can't be read back (an unknown currency or state, no approval).
     func transfer() -> Transfer? {
         guard let source = Currency.supported(code: sourceCurrency),
             let target = Currency.supported(code: targetCurrency),
             let state = TransferState(rawValue: state),
             let rateValue = Decimal(string: rate, locale: Locale(identifier: "en_US_POSIX")),
             let fxRate = try? FXRate(source: source, target: target, rate: rateValue),
+            let payload = confirmationPayload,
+            let signature = confirmationSignature,
             let quote = try? FXQuote(
                 id: quoteID,
                 sourceAmount: Money(amountMinor: sourceMinor, currency: source),
@@ -74,7 +86,13 @@ final class TransferRecord {
             return nil
         }
         let recipient = Recipient(id: recipientID, name: recipientName, currency: target, accountLast4: recipientLast4)
-        let draft = TransferDraft(id: id, quote: quote, recipient: recipient, sourceAccountID: sourceAccountID)
+        let draft = TransferDraft(
+            id: id,
+            quote: quote,
+            recipient: recipient,
+            sourceAccountID: sourceAccountID,
+            confirmation: SignedConfirmation(payload: payload, signature: signature, assertion: confirmationAssertion)
+        )
         return Transfer(
             draft: draft,
             state: state,

@@ -284,10 +284,10 @@ extension TransferOutbox {
                 }
             case .confirm:
                 do throws(TransferAPIError) {
-                    return .success(try await api.confirm(id: transfer.id))
+                    return .success(try await api.confirm(id: transfer.id, confirmation: transfer.draft.confirmation))
                 } catch .notFound {
                     _ = try await api.create(transfer.draft)
-                    return .success(try await api.confirm(id: transfer.id))
+                    return .success(try await api.confirm(id: transfer.id, confirmation: transfer.draft.confirmation))
                 }
             case .poll:
                 return .success(try await api.status(id: transfer.id))

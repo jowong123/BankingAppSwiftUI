@@ -37,6 +37,8 @@ actor FakeTransferAPI: TransferAPI {
     }
 
     private(set) var calls: [Call] = []
+    /// What each confirm carried.
+    private(set) var confirmations: [SignedConfirmation] = []
     /// Calls that have finished, answered or thrown.
     private(set) var returned: [Call] = []
     private var scripts: [Call: [Result<RemoteTransferStatus, TransferAPIError>]] = [:]
@@ -71,8 +73,9 @@ actor FakeTransferAPI: TransferAPI {
         try await answer(.create, default: .awaitingConfirmation)
     }
 
-    func confirm(id: UUID) async throws(TransferAPIError) -> RemoteTransferStatus {
-        try await answer(.confirm, default: .processing)
+    func confirm(id: UUID, confirmation: SignedConfirmation) async throws(TransferAPIError) -> RemoteTransferStatus {
+        confirmations.append(confirmation)
+        return try await answer(.confirm, default: .processing)
     }
 
     func status(id: UUID) async throws(TransferAPIError) -> RemoteTransferStatus {
@@ -120,6 +123,9 @@ final class Sleeps: Sendable {
     }
 }
 
+let signedApproval = SignedConfirmation(
+    payload: Data(#"{"nonce":"n1"}"#.utf8), signature: Data([0x30, 0x45]), assertion: Data([0xA2]))
+
 func draft(id: UUID = UUID()) throws -> TransferDraft {
     let rate = try FXRate(source: .sgd, target: .usd, rate: Decimal(string: "0.7341") ?? 0)
     let quote = try FXQuote(
@@ -131,7 +137,8 @@ func draft(id: UUID = UUID()) throws -> TransferDraft {
         expiresAt: Date(timeIntervalSince1970: 1_800_000_030)
     )
     let recipient = Recipient(id: "rcp_alice_usd", name: "Alice Tan", currency: .usd, accountLast4: "4821")
-    return TransferDraft(id: id, quote: quote, recipient: recipient, sourceAccountID: "acc_sgd")
+    return TransferDraft(
+        id: id, quote: quote, recipient: recipient, sourceAccountID: "acc_sgd", confirmation: signedApproval)
 }
 
 func makeOutbox(

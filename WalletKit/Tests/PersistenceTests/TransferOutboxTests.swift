@@ -5,7 +5,11 @@ import Testing
 @testable import Persistence
 
 /// The time limit turns a transfer that never finishes into a failure, not a hung run.
-@Suite(.timeLimit(.minutes(1))) struct TransferOutboxTests {
+///
+/// Serialized: CoreData can crash (EXC_BAD_ACCESS in `_generateTriggerSQL`) when two SQLite
+/// stores for the same model are opened at the same moment, which parallel tests do. The app
+/// opens one store at a time, inside the outbox actor.
+@Suite(.serialized, .timeLimit(.minutes(1))) struct TransferOutboxTests {
     @Test func sendsCreateConfirmAndPollsUntilCompleted() async throws {
         let api = FakeTransferAPI()
         let outbox = try makeOutbox(api: api)
@@ -66,6 +70,23 @@ import Testing
 
         #expect(await states(of: transfer.id, in: relaunched).last == .completed)
         #expect(await api.calls == [.create, .confirm, .status])
+    }
+
+    /// The Face ID approval is saved with the transfer, and every confirm, also after a
+    /// relaunch, sends it unchanged: the outbox never needs to ask for Face ID again.
+    @Test func confirmSendsTheSavedApprovalAfterARelaunch() async throws {
+        let directory = temporaryDirectory()
+        let transfer = try draft()
+        let neverAnswers = FakeTransferAPI()
+        await neverAnswers.hold(.create, at: Gate())
+        _ = try await makeOutbox(api: neverAnswers, directory: directory).send(transfer)
+
+        let api = FakeTransferAPI()
+        let relaunched = try makeOutbox(api: api, directory: directory)
+        await relaunched.resumePending()
+
+        #expect(await states(of: transfer.id, in: relaunched).last == .completed)
+        #expect(await api.confirmations == [signedApproval])
     }
 
     /// A timeout is never a failure: wait, back off, ask again.
