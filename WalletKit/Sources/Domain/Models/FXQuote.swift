@@ -38,6 +38,24 @@ public struct FXQuote: Hashable, Sendable, Identifiable {
         self.expiresAt = expiresAt
     }
 
+    /// The client's own check of the server's maths (Phase 3 carry-over): the fee is not
+    /// negative and less than the amount, `target = round((source - fee) * rate)` to within
+    /// one minor unit, and the quote hasn't expired. A quote that fails is never shown, so the
+    /// user never approves numbers that don't add up.
+    public func addsUp(at now: Date) -> Bool {
+        guard !fee.isNegative,
+            (try? fee.compare(to: sourceAmount)) == .orderedAscending,
+            let net = try? sourceAmount.subtracting(fee),
+            let expected = try? rate.convert(net).amountMinor(),
+            let actual = try? targetAmount.amountMinor()
+        else {
+            return false
+        }
+        // A hostile amount near Int64's limits must not crash the check.
+        let (difference, overflow) = expected.subtractingReportingOverflow(actual)
+        return !overflow && (-1...1).contains(difference) && !isExpired(at: now)
+    }
+
     /// `now` is passed in rather than read from the clock so callers and tests control time.
     public func isExpired(at now: Date) -> Bool {
         now >= expiresAt

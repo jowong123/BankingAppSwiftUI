@@ -91,3 +91,49 @@ import Testing
         }
     }
 }
+
+/// The app's own check of the server's quote (Phase 3 carry-over).
+@Suite struct FXQuoteAddsUpTests {
+    let now = Date(timeIntervalSince1970: 1_800_000_000)
+
+    func quote(source: Int64 = 10_000, target: Int64, fee: Int64 = 150, expiresIn: TimeInterval = 30) throws -> FXQuote
+    {
+        try FXQuote(
+            id: "q",
+            sourceAmount: Money(amountMinor: source, currency: .sgd),
+            targetAmount: Money(amountMinor: target, currency: .usd),
+            rate: try FXRate(source: .sgd, target: .usd, rate: try decimal("0.7412")),
+            fee: Money(amountMinor: fee, currency: .sgd),
+            expiresAt: now.addingTimeInterval(expiresIn)
+        )
+    }
+
+    /// (100.00 - 1.50) x 0.7412 = 73.0082, so 73.01; one minor unit either way is rounding.
+    @Test(arguments: [7_301, 7_300, 7_302])
+    func correctMathsAddsUp(target: Int64) throws {
+        #expect(try quote(target: target).addsUp(at: now))
+    }
+
+    @Test func wrongTargetDoesNotAddUp() throws {
+        #expect(try !quote(target: 7_400).addsUp(at: now))
+    }
+
+    @Test(arguments: [Int64(10_000), 20_000, -1])
+    func impossibleFeeDoesNotAddUp(fee: Int64) throws {
+        #expect(try !quote(target: 0, fee: fee).addsUp(at: now))
+    }
+
+    @Test func expiredQuoteDoesNotAddUp() throws {
+        #expect(try !quote(target: 7_301, expiresIn: 0).addsUp(at: now))
+    }
+}
+
+@Suite struct TransferFailureCodeTests {
+    /// Refusals of the Face ID approval, so the status screen can say what happened.
+    @Test func approvalRefusalsHaveTheirOwnReasons() {
+        #expect(TransferFailure(serverCode: "nonce_expired") == .approvalExpired)
+        for code in ["invalid_signature", "payload_mismatch", "nonce_used", "invalid_nonce", "assertion_invalid"] {
+            #expect(TransferFailure(serverCode: code) == .notApproved)
+        }
+    }
+}

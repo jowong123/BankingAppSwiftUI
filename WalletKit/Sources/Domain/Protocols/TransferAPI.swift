@@ -7,8 +7,9 @@ public protocol TransferAPI: Sendable {
     /// existing transfer.
     func create(_ draft: TransferDraft) async throws(TransferAPIError) -> RemoteTransferStatus
 
-    /// `POST /v1/transfers/{id}/confirm`. Moves the money. A repeat returns the status.
-    func confirm(id: UUID) async throws(TransferAPIError) -> RemoteTransferStatus
+    /// `POST /v1/transfers/{id}/confirm` with the signed approval. Moves the money. A repeat
+    /// returns the status.
+    func confirm(id: UUID, confirmation: SignedConfirmation) async throws(TransferAPIError) -> RemoteTransferStatus
 
     /// `GET /v1/transfers/{id}`.
     func status(id: UUID) async throws(TransferAPIError) -> RemoteTransferStatus

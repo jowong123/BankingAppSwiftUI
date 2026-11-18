@@ -21,6 +21,9 @@ public enum AuthError: Error, Hashable, Sendable {
     /// Faces or fingerprints were added or removed since the PIN was set. Face ID is off
     /// until the PIN is entered, so someone who adds their own face can't get in.
     case biometryChanged
+    /// This device couldn't be bound: its key or its App Attest attestation was refused, or
+    /// the binding token ran out. Signing in again starts over.
+    case deviceSetupFailed
     /// The secure storage couldn't be read or written (e.g. the device is locked).
     case storageUnavailable
     /// The user or the system cancelled.
