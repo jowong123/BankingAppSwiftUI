@@ -5,6 +5,7 @@ import Vapor
 /// `confirm` (TransfersController+Confirm.swift).
 struct TransfersController: Sendable {
     let clock: BackendClock
+    let attestation: AttestationMode
 
     @Sendable func create(_ request: Request) async throws -> Response {
         let user = try request.auth.require(AuthenticatedUser.self)

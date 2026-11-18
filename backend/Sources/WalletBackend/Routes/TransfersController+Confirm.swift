@@ -2,8 +2,8 @@ import FluentKit
 import SQLKit
 import Vapor
 
-/// Confirm and settlement. Phase 6 confirms without a signature; Phase 7 makes the signed
-/// payload mandatory on this same route (ADR-022).
+/// Confirm and settlement. Every confirm that would move money carries a payload signed by
+/// the device's Secure Enclave key (`verifyApproval`, ADR-008).
 ///
 /// Every change is a conditional update that says what it expects to find (`WHERE status =`,
 /// `WHERE balanceMinor >=`) and reports whether it changed a row. Two requests racing for the
@@ -14,13 +14,15 @@ extension TransfersController {
     /// transaction. `sourceMinor` includes the fee: the user is debited exactly that.
     ///
     /// - Safe to repeat: only an unconfirmed transfer changes; any other status is returned
-    ///   as it is.
+    ///   as it is, so a retry after a lost response needs no fresh approval.
+    /// - An unconfirmed transfer needs a valid approval first; a refused one stays unconfirmed.
     /// - Too late (more than `confirmGraceMillis` after the quote expired) fails it with
     ///   `quote_expired` and debits nothing, so an old rate can't be kept as a free option.
     /// - Not enough balance fails it with `insufficient_funds` and debits nothing.
     @Sendable func confirm(_ request: Request) async throws -> TransferDTO {
         let user = try request.auth.require(AuthenticatedUser.self)
         let id = try request.parameters.require("transferID").lowercased()
+        let body = try? request.content.decode(ConfirmRequest.self)
         let now = clock.nowMillis
         let row = try await request.db.transaction { database in
             let sql = try database.sqlDatabase()
@@ -30,6 +32,7 @@ extension TransfersController {
             guard row.status == "awaiting_confirmation" else {
                 return row
             }
+            try await verifyApproval(body, for: row, user: user, now: now, sql: sql)
             let quote = try await sql.select().column("*").from("quotes")
                 .where("id", .equal, row.quoteId)
                 .first(decoding: QuoteRow.self)

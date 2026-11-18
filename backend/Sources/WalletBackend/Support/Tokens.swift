@@ -6,6 +6,8 @@ import Vapor
 enum Tokens {
     static let accessLifetimeSeconds: Int64 = 15 * 60
     static let refreshLifetimeSeconds: Int64 = 30 * 24 * 60 * 60
+    /// Long enough to make a key and attest it, short enough that a leaked one is useless soon.
+    static let bindingLifetimeSeconds: Int64 = 5 * 60
     /// How long after a rotation the old refresh token may be presented again, as a retry
     /// of a response that never arrived, without counting as reuse.
     static let refreshGraceMillis: Int64 = 30_000

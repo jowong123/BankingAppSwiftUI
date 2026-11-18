@@ -40,7 +40,7 @@ struct RecipientRow: Codable, Sendable {
 struct TokenRow: Codable, Sendable {
     let tokenHash: String
     let userId: String
-    /// "access" or "refresh".
+    /// "access", "refresh", or "binding" (single use, only accepted by `POST /v1/devices`).
     let kind: String
     let expiresAt: Int64
     /// 1 once a refresh token has been exchanged. Reusing it revokes the whole session family.
@@ -51,6 +51,33 @@ struct TokenRow: Codable, Sendable {
     /// replaced it. Used for the lost-response grace window (ADR-016).
     var rotatedAt: Int64?
     var replacedBy: String?
+    /// The bound device the session belongs to. `nil` for a binding token.
+    var deviceId: String?
+}
+
+/// A bound device (SPEC section 6): its Secure Enclave signing key and, when attested, its
+/// App Attest key and counter.
+struct DeviceRow: Codable, Sendable {
+    let id: String
+    let userId: String
+    /// X9.63 P-256 public key that signs confirms. `nil`: the phone has no Face ID or Touch ID
+    /// set up, so this device can view but not send.
+    let signingKey: Data?
+    let attestKeyId: String?
+    let attestPublicKey: Data?
+    /// The last App Attest assertion counter seen; each assertion must be higher.
+    let signCount: Int64
+    let createdAt: Int64
+}
+
+/// A signing nonce for one transfer on one device. Single use, valid 60 s.
+struct ChallengeRow: Codable, Sendable {
+    let nonce: String
+    let userId: String
+    let deviceId: String
+    let transferId: String
+    let expiresAt: Int64
+    var usedAt: Int64?
 }
 
 struct QuoteRow: Codable, Sendable {

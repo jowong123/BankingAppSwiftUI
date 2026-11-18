@@ -115,6 +115,40 @@ struct CreateSchema: AsyncMigration {
     }
 }
 
+/// Phase 7: bound devices and signing challenges. A separate migration, so an existing
+/// sandbox database gains the tables without being recreated.
+struct AddDeviceBinding: AsyncMigration {
+    func prepare(on database: any Database) async throws {
+        let sql = try database.sqlDatabase()
+        try await sql.alter(table: "tokens").column("deviceId", type: .text).run()
+
+        try await sql.create(table: "devices")
+            .column("id", type: .text, .primaryKey(autoIncrement: false))
+            .column("userId", type: .text, .notNull)
+            .column("signingKey", type: .blob)
+            .column("attestKeyId", type: .text)
+            .column("attestPublicKey", type: .blob)
+            .column("signCount", type: .bigint, .notNull)
+            .column("createdAt", type: .bigint, .notNull)
+            .run()
+
+        try await sql.create(table: "challenges")
+            .column("nonce", type: .text, .primaryKey(autoIncrement: false))
+            .column("userId", type: .text, .notNull)
+            .column("deviceId", type: .text, .notNull)
+            .column("transferId", type: .text, .notNull)
+            .column("expiresAt", type: .bigint, .notNull)
+            .column("usedAt", type: .bigint)
+            .run()
+    }
+
+    func revert(on database: any Database) async throws {
+        let sql = try database.sqlDatabase()
+        try await sql.drop(table: "challenges").ifExists().run()
+        try await sql.drop(table: "devices").ifExists().run()
+    }
+}
+
 extension Database {
     func sqlDatabase() throws -> any SQLDatabase {
         guard let sql = self as? any SQLDatabase else {

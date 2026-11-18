@@ -1,14 +1,16 @@
 import SQLKit
 import Vapor
 
-/// Sandbox login and refresh. Device binding and the binding token come in Phase 7.
+/// Sandbox login, refresh and sign-out. Login only proves the password: it returns a
+/// binding token, and a session starts when `POST /v1/devices` binds this device with it
+/// (SPEC section 6, `DevicesController`).
 struct AuthController: Sendable {
     let clock: BackendClock
     /// Verified against when the email is unknown, so a missing account takes as long
     /// as a wrong password and response time doesn't reveal which emails exist.
     let dummyHash: String
 
-    @Sendable func login(_ request: Request) async throws -> SessionTokens {
+    @Sendable func login(_ request: Request) async throws -> BindingTokenResponse {
         let body = try request.content.decode(LoginRequest.self)
         let email = body.email.trimmingCharacters(in: .whitespaces).lowercased()
         let user = try await request.sql.select().column("*").from("users")
@@ -21,7 +23,18 @@ struct AuthController: Sendable {
         guard let user, passwordMatches else {
             throw APIFailure.invalidCredentials
         }
-        return try await issueTokens(userID: user.id, sql: request.sql)
+        let token = Tokens.generate()
+        try await request.sql.insert(into: "tokens").model(
+            TokenRow(
+                tokenHash: Tokens.hash(token),
+                userId: user.id,
+                kind: "binding",
+                expiresAt: clock.nowMillis + Tokens.bindingLifetimeSeconds * 1000,
+                revoked: 0,
+                pairId: UUID().uuidString
+            )
+        ).run()
+        return BindingTokenResponse(bindingToken: token, expiresIn: Tokens.bindingLifetimeSeconds)
     }
 
     /// Refresh tokens rotate: each one works once. Presenting a used one means it was
@@ -99,7 +112,7 @@ struct AuthController: Sendable {
 
     /// Issues a new pair and records which refresh token replaced `old`.
     private func rotate(_ old: TokenRow, sql: any SQLDatabase) async throws -> SessionTokens {
-        let issued = try await issueTokens(userID: old.userId, sql: sql)
+        let issued = try await Self.issueTokens(userID: old.userId, deviceID: old.deviceId, clock: clock, sql: sql)
         try await sql.update("tokens")
             .set("replacedBy", to: Tokens.hash(issued.refreshToken))
             .where("tokenHash", .equal, old.tokenHash)
@@ -131,7 +144,10 @@ struct AuthController: Sendable {
         return try await rotate(used, sql: sql)
     }
 
-    private func issueTokens(userID: String, sql: any SQLDatabase) async throws -> SessionTokens {
+    /// A new access and refresh pair for `deviceID`'s session.
+    static func issueTokens(userID: String, deviceID: String?, clock: BackendClock, sql: any SQLDatabase)
+        async throws -> SessionTokens
+    {
         let now = clock.nowMillis
         let access = Tokens.generate()
         let refresh = Tokens.generate()
@@ -143,7 +159,8 @@ struct AuthController: Sendable {
                 kind: "access",
                 expiresAt: now + Tokens.accessLifetimeSeconds * 1000,
                 revoked: 0,
-                pairId: pairID
+                pairId: pairID,
+                deviceId: deviceID
             ),
             TokenRow(
                 tokenHash: Tokens.hash(refresh),
@@ -151,7 +168,8 @@ struct AuthController: Sendable {
                 kind: "refresh",
                 expiresAt: now + Tokens.refreshLifetimeSeconds * 1000,
                 revoked: 0,
-                pairId: pairID
+                pairId: pairID,
+                deviceId: deviceID
             ),
         ]).run()
         return SessionTokens(accessToken: access, refreshToken: refresh, expiresIn: Tokens.accessLifetimeSeconds)

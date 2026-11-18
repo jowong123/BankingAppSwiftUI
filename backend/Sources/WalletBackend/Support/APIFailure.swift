@@ -59,6 +59,66 @@ struct APIFailure: AbortError, Equatable {
         message: "The transfer was declined."
     )
 
+    // MARK: Device binding and signing
+
+    static let invalidBindingToken = APIFailure(
+        status: .unauthorized,
+        code: "invalid_binding_token",
+        message: "Sign in again to set up this device."
+    )
+    static let attestationInvalid = APIFailure(
+        status: .unprocessableEntity,
+        code: "attestation_invalid",
+        message: "This device couldn't be verified."
+    )
+    /// The session's device has no signing key, or the session predates device binding.
+    static let deviceNotBound = APIFailure(
+        status: .forbidden,
+        code: "device_not_bound",
+        message: "Set up Face ID and sign in again to send money."
+    )
+    static let signatureRequired = APIFailure(
+        status: .unprocessableEntity,
+        code: "signature_required",
+        message: "This confirm must be signed."
+    )
+    static let invalidSignature = APIFailure(
+        status: .unprocessableEntity,
+        code: "invalid_signature",
+        message: "The signature doesn't match this device."
+    )
+    static let payloadMismatch = APIFailure(
+        status: .unprocessableEntity,
+        code: "payload_mismatch",
+        message: "What was signed doesn't match this transfer."
+    )
+    static let invalidNonce = APIFailure(
+        status: .unprocessableEntity,
+        code: "invalid_nonce",
+        message: "This approval wasn't issued for this transfer."
+    )
+    static let nonceUsed = APIFailure(
+        status: .unprocessableEntity,
+        code: "nonce_used",
+        message: "This approval was already used."
+    )
+    static let nonceExpired = APIFailure(
+        status: .unprocessableEntity,
+        code: "nonce_expired",
+        message: "The approval expired. Nothing was sent."
+    )
+    static let assertionInvalid = APIFailure(
+        status: .unprocessableEntity,
+        code: "assertion_invalid",
+        message: "This request didn't come from a verified app."
+    )
+
+    static let tooManyChallenges = APIFailure(
+        status: .tooManyRequests,
+        code: "too_many_requests",
+        message: "Too many approvals asked for this transfer. Try again in a minute."
+    )
+
     static func invalid(_ message: String) -> APIFailure {
         APIFailure(status: .unprocessableEntity, code: "invalid_request", message: message)
     }

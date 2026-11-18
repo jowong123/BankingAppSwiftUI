@@ -9,8 +9,8 @@ final class TransferConfirmTests: XCTestCase {
             let tokens = try await harness.login()
             let transfer = try await created(harness, tokens.accessToken, minor: 10_000)
 
-            let first = try await Self.confirm(harness, tokens.accessToken, transfer.id)
-            let again = try await Self.confirm(harness, tokens.accessToken, transfer.id)
+            let first = try await harness.confirm(tokens, transfer)
+            let again = try await harness.confirm(tokens, transfer)
 
             XCTAssertEqual(first.status, .ok)
             XCTAssertEqual(try first.content.decode(TransferDTO.self).status, "processing")
@@ -29,9 +29,9 @@ final class TransferConfirmTests: XCTestCase {
             let tokens = try await harness.login()
             let first = try await created(harness, tokens.accessToken, minor: 1_000_000)
             let second = try await created(harness, tokens.accessToken, minor: 1_000_000)
-            _ = try await Self.confirm(harness, tokens.accessToken, first.id)
+            _ = try await harness.confirm(tokens, first)
 
-            let response = try await Self.confirm(harness, tokens.accessToken, second.id)
+            let response = try await harness.confirm(tokens, second)
 
             let failed = try response.content.decode(TransferDTO.self)
             XCTAssertEqual(failed.status, "failed")
@@ -47,8 +47,8 @@ final class TransferConfirmTests: XCTestCase {
             let transfer = try await created(harness, demo.accessToken, minor: 10_000)
             let other = try await harness.login(email: Sandbox.otherEmail, password: Sandbox.otherPassword)
 
-            let response = try await Self.confirm(harness, other.accessToken, transfer.id)
-            let unknown = try await Self.confirm(harness, demo.accessToken, UUID().uuidString)
+            let response = try await harness.confirm(other, transfer)
+            let unknown = try await harness.confirm(demo, transfer, id: UUID().uuidString)
 
             XCTAssertEqual(response.status, .notFound)
             XCTAssertEqual(unknown.status, .notFound)
@@ -61,7 +61,7 @@ final class TransferConfirmTests: XCTestCase {
         try await withApp { harness in
             let tokens = try await harness.login()
             let transfer = try await created(harness, tokens.accessToken, minor: 10_000)
-            _ = try await Self.confirm(harness, tokens.accessToken, transfer.id)
+            _ = try await harness.confirm(tokens, transfer)
 
             harness.advance(2)
             let early = try await status(harness, tokens.accessToken, transfer.id)
@@ -79,7 +79,7 @@ final class TransferConfirmTests: XCTestCase {
             let tokens = try await harness.login()
             let transfer = try await created(
                 harness, tokens.accessToken, minor: 10_000, to: "EUR", recipient: Sandbox.declinedRecipientID)
-            _ = try await Self.confirm(harness, tokens.accessToken, transfer.id)
+            _ = try await harness.confirm(tokens, transfer)
 
             harness.advance(3)
             let declined = try await status(harness, tokens.accessToken, transfer.id)
@@ -103,7 +103,7 @@ final class TransferConfirmTests: XCTestCase {
             let transfer = try await created(harness, tokens.accessToken, minor: 10_000)
 
             harness.advance(30 + 121)
-            let response = try await Self.confirm(harness, tokens.accessToken, transfer.id)
+            let response = try await harness.confirm(tokens, transfer)
 
             let failed = try response.content.decode(TransferDTO.self)
             XCTAssertEqual(failed.status, "failed")
@@ -120,7 +120,7 @@ final class TransferConfirmTests: XCTestCase {
             let transfer = try await created(harness, tokens.accessToken, minor: 10_000)
 
             harness.advance(30 + 60)
-            let response = try await Self.confirm(harness, tokens.accessToken, transfer.id)
+            let response = try await harness.confirm(tokens, transfer)
 
             XCTAssertEqual(try response.content.decode(TransferDTO.self).status, "processing")
         }
@@ -132,8 +132,8 @@ final class TransferConfirmTests: XCTestCase {
             let tokens = try await harness.login()
             let transfer = try await created(harness, tokens.accessToken, minor: 10_000)
 
-            async let first = Self.confirm(harness, tokens.accessToken, transfer.id)
-            async let second = Self.confirm(harness, tokens.accessToken, transfer.id)
+            async let first = harness.confirm(tokens, transfer)
+            async let second = harness.confirm(tokens, transfer)
             _ = try await (first, second)
 
             let balance = try await balanceMinor(harness, "acc_sgd")
@@ -152,13 +152,13 @@ final class TransferConfirmTests: XCTestCase {
             let first = try await created(harness, tokens.accessToken, minor: 1_000_000)
             let second = try await created(harness, tokens.accessToken, minor: 1_000_000)
 
-            async let one = Self.confirm(harness, tokens.accessToken, first.id)
-            async let two = Self.confirm(harness, tokens.accessToken, second.id)
+            async let one = harness.confirm(tokens, first)
+            async let two = harness.confirm(tokens, second)
             _ = try await (one, two)
             var statuses: [String] = []
             for id in [first.id, second.id] {
                 // The app's retry: confirming again is safe.
-                let retried = try await Self.confirm(harness, tokens.accessToken, id)
+                let retried = try await harness.confirm(tokens, id == first.id ? first : second)
                 statuses.append(try retried.content.decode(TransferDTO.self).status)
             }
 
@@ -170,7 +170,7 @@ final class TransferConfirmTests: XCTestCase {
 
     // MARK: - Helpers
 
-    private func created(
+    func created(
         _ harness: Harness,
         _ token: String,
         minor: Int64,
@@ -186,17 +186,13 @@ final class TransferConfirmTests: XCTestCase {
         return try response.content.decode(TransferDTO.self)
     }
 
-    private static func confirm(_ harness: Harness, _ token: String, _ id: String) async throws -> XCTHTTPResponse {
-        try await harness.send(.POST, "/v1/transfers/\(id)/confirm", token: token)
-    }
-
-    private func status(_ harness: Harness, _ token: String, _ id: String) async throws -> TransferDTO {
+    func status(_ harness: Harness, _ token: String, _ id: String) async throws -> TransferDTO {
         let response = try await harness.send(.GET, "/v1/transfers/\(id)", token: token)
         XCTAssertEqual(response.status, .ok)
         return try response.content.decode(TransferDTO.self)
     }
 
-    private func balanceMinor(_ harness: Harness, _ accountID: String) async throws -> Int64? {
+    func balanceMinor(_ harness: Harness, _ accountID: String) async throws -> Int64? {
         let sql = try harness.app.db.sqlDatabase()
         return try await sql.select().column("*").from("accounts")
             .where("id", .equal, accountID)

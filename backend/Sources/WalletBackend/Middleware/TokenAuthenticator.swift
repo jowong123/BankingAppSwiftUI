@@ -3,6 +3,8 @@ import Vapor
 
 struct AuthenticatedUser: Authenticatable {
     let id: String
+    /// The bound device of this session. `nil` for a session from before device binding.
+    let deviceId: String?
 }
 
 /// Looks the bearer token up by its hash and logs the user in if it's an unexpired
@@ -19,6 +21,6 @@ struct TokenAuthenticator: AsyncBearerAuthenticator {
         guard let row, row.revoked == 0, row.expiresAt > clock.nowMillis else {
             return
         }
-        request.auth.login(AuthenticatedUser(id: row.userId))
+        request.auth.login(AuthenticatedUser(id: row.userId, deviceId: row.deviceId))
     }
 }

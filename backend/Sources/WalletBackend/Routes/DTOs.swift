@@ -140,3 +140,62 @@ struct TransferDTO: Content {
         updatedAt = Date(millis: row.updatedAt)
     }
 }
+
+// MARK: - Device binding and signing (SPEC section 6)
+
+/// `POST /v1/auth/login`: a single-use token for `POST /v1/devices`. No session yet.
+struct BindingTokenResponse: Content {
+    let bindingToken: String
+    let expiresIn: Int64
+}
+
+struct DeviceBindingRequest: Content {
+    let bindingToken: String
+    /// Base64 X9.63 P-256 public key from the Secure Enclave. Absent when the phone has no
+    /// Face ID or Touch ID set up: the device can then view but not send.
+    let signingKey: String?
+    /// Required unless the server runs with `ATTEST_MODE=sandbox`.
+    let attestation: AttestationDTO?
+}
+
+/// `object` is the CBOR attestation from `DCAppAttestService.attestKey`, its client data
+/// `"<bindingToken>.<signingKey or empty>"`. Both base64.
+struct AttestationDTO: Content {
+    let keyId: String
+    let object: String
+}
+
+struct BoundDevice: Content {
+    let deviceId: String
+    let accessToken: String
+    let refreshToken: String
+    let expiresIn: Int64
+}
+
+struct ChallengeDTO: Content {
+    let nonce: String
+    let expiresAt: Date
+}
+
+/// The confirm body. `payload` is the exact bytes that were signed, base64, so the server
+/// never has to reproduce the app's JSON to check the signature.
+struct ConfirmRequest: Content {
+    let payload: String
+    /// Base64 DER ECDSA P-256 signature over SHA-256 of the payload.
+    let signature: String
+    /// Base64 CBOR App Attest assertion over the payload. Required for an attested device.
+    let assertion: String?
+}
+
+/// What the user approved with Face ID (SPEC section 6). Every field must match the
+/// stored transfer and an unused, unexpired challenge.
+struct ConfirmPayload: Codable, Equatable {
+    let transferId: String
+    let amountMinor: Int64
+    let currency: String
+    let recipientId: String
+    let quoteId: String
+    let nonce: String
+    /// Unix milliseconds when the app signed.
+    let timestamp: Int64
+}

@@ -14,6 +14,10 @@ let package = Package(
         .package(url: "https://github.com/vapor/fluent.git", from: "4.12.0"),
         .package(url: "https://github.com/vapor/fluent-sqlite-driver.git", from: "4.8.0"),
         .package(url: "https://github.com/vapor/sql-kit.git", from: "3.32.0"),
+        // Already in the tree through Vapor; used directly to check App Attest certificate
+        // chains (ADR-024).
+        .package(url: "https://github.com/apple/swift-certificates.git", from: "1.21.0"),
+        .package(url: "https://github.com/apple/swift-asn1.git", from: "1.7.0"),
     ],
     targets: [
         .executableTarget(
@@ -23,6 +27,8 @@ let package = Package(
                 .product(name: "Fluent", package: "fluent"),
                 .product(name: "FluentSQLiteDriver", package: "fluent-sqlite-driver"),
                 .product(name: "SQLKit", package: "sql-kit"),
+                .product(name: "X509", package: "swift-certificates"),
+                .product(name: "SwiftASN1", package: "swift-asn1"),
             ]
         ),
         .testTarget(
@@ -30,6 +36,7 @@ let package = Package(
             dependencies: [
                 .target(name: "WalletBackend"),
                 .product(name: "XCTVapor", package: "vapor"),
+                .product(name: "X509", package: "swift-certificates"),
             ]
         ),
     ]

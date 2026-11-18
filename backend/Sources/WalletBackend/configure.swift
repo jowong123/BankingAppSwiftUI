@@ -6,6 +6,7 @@ func configure(_ app: Application, environment: BackendEnvironment) async throws
     app.databases.use(.sqlite(environment.database), as: .sqlite)
     app.migrations.add(CreateSchema())
     app.migrations.add(SeedSandboxData(bcryptCost: environment.bcryptCost, clock: environment.clock))
+    app.migrations.add(AddDeviceBinding())
     try await app.autoMigrate()
 
     // Outermost first. Request ID wraps everything so errors and logs carry it.
@@ -31,6 +32,8 @@ func routes(_ app: Application, environment: BackendEnvironment) throws {
     api.post("auth", "login", use: auth.login)
     api.post("auth", "refresh", use: auth.refresh)
     api.post("auth", "logout", use: auth.logout)
+    // The binding token in the body is the credential; there is no session yet.
+    api.post("devices", use: DevicesController(clock: clock, attestation: environment.attestation).bind)
 
     let signedIn = api.grouped(
         TokenAuthenticator(clock: clock),
@@ -46,9 +49,11 @@ func routes(_ app: Application, environment: BackendEnvironment) throws {
     let quotes = QuotesController(clock: clock, rates: environment.rates)
     signedIn.grouped(IdempotencyMiddleware(required: false, clock: clock)).post("quotes", use: quotes.create)
 
-    let transfers = TransfersController(clock: clock)
+    let transfers = TransfersController(clock: clock, attestation: environment.attestation)
     signedIn.grouped(IdempotencyMiddleware(required: true, clock: clock)).post("transfers", use: transfers.create)
     signedIn.get("transfers", ":transferID", use: transfers.show)
+    // A fresh nonce per call; nothing to replay, so no key record needed.
+    signedIn.post("transfers", ":transferID", "challenge", use: transfers.challenge)
     // Idempotent by status (only `awaiting_confirmation` changes), so no key record needed.
     signedIn.post("transfers", ":transferID", "confirm", use: transfers.confirm)
 }
