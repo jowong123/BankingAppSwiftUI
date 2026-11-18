@@ -1,8 +1,11 @@
 import Domain
 import Foundation
 
-/// The signed-in session: tokens and PIN record in secure storage, the lock state in memory.
+/// The signed-in session: tokens, PIN record and bound device in secure storage, the lock
+/// state in memory.
 ///
+/// - Signing in binds this device (`DeviceBinder`, SPEC section 6); signing out deletes the
+///   signing key with everything else.
 /// - Supplies tokens to `WalletAPI` (`SessionTokenProvider`) and drives the auth screens
 ///   (`SessionManaging`).
 /// - An actor, so state, tokens and the PIN attempt counter can't race. Where it awaits
@@ -19,7 +22,9 @@ public actor SessionStore: SessionManaging, SessionTokenProvider {
     private let store: any SecureStore
     private let biometrics: any BiometricAuthenticator
     private let hasher: PINHasher
-    private var state: SessionState = .signedOut {
+    private let deviceKey: any DeviceKey
+    private let binder: DeviceBinder
+    private(set) var state: SessionState = .signedOut {
         didSet {
             if state != oldValue {
                 for listener in listeners.values {
@@ -28,36 +33,58 @@ public actor SessionStore: SessionManaging, SessionTokenProvider {
             }
         }
     }
-    /// Everyone following `stateUpdates()`.
-    private var listeners: [UUID: AsyncStream<SessionState>.Continuation] = [:]
+    /// Everyone following `stateUpdates()` (SessionStore+StateUpdates.swift).
+    var listeners: [UUID: AsyncStream<SessionState>.Continuation] = [:]
     private var tokens: SessionTokens?
     /// Bumped by every wipe and login.
     private var generation = 0
 
-    public init(api: any AuthAPI, store: any SecureStore, biometrics: any BiometricAuthenticator) {
-        self.init(api: api, store: store, biometrics: biometrics, hasher: PINHasher())
+    /// - Parameters:
+    ///   - deviceKey: the signing key made at sign-in (`SecureEnclaveKey` on a phone).
+    ///   - attestor: App Attest; on the simulator it reports itself unsupported.
+    public init(
+        api: any AuthAPI,
+        store: any SecureStore,
+        biometrics: any BiometricAuthenticator,
+        deviceKey: any DeviceKey,
+        attestor: any AppAttesting
+    ) {
+        self.init(
+            api: api, store: store, biometrics: biometrics, deviceKey: deviceKey, attestor: attestor,
+            hasher: PINHasher())
     }
 
     /// Tests pass a cheap hasher; the iteration count is stored with each record.
-    init(api: any AuthAPI, store: any SecureStore, biometrics: any BiometricAuthenticator, hasher: PINHasher) {
+    init(
+        api: any AuthAPI,
+        store: any SecureStore,
+        biometrics: any BiometricAuthenticator,
+        deviceKey: any DeviceKey,
+        attestor: any AppAttesting,
+        hasher: PINHasher
+    ) {
         self.api = api
         self.store = store
         self.biometrics = biometrics
+        self.deviceKey = deviceKey
+        binder = DeviceBinder(api: api, key: deviceKey, attestor: attestor)
         self.hasher = hasher
     }
 
     // MARK: - SessionManaging
 
-    /// Tokens and a PIN with attempts left: locked. Missing or corrupt data is wiped:
-    /// tokens without a PIN mean the app quit during PIN creation, and asking for a new PIN
-    /// then would let whoever holds the phone take over the session without the password.
+    /// Tokens, a bound device and a PIN with attempts left: locked. Missing or corrupt data is
+    /// wiped: tokens without a PIN mean the app quit during PIN creation, and asking for a new
+    /// PIN then would let whoever holds the phone take over the session without the password.
+    /// Tokens without a device are a session from before device binding.
     /// If the Keychain can't be read at all (the app launched while the phone was locked),
     /// nothing is deleted: the screen shows "locked" and unlocking reads it again.
     public func restore() async -> SessionState {
         do {
             let stored = try loadTokens()
             let record = try loadPIN()
-            guard let stored, let record, record.attemptsLeft > 0 else {
+            let device = try store.data(for: DeviceRecord.storeKey)
+            guard let stored, let record, record.attemptsLeft > 0, device != nil else {
                 wipe()
                 return state
             }
@@ -76,17 +103,39 @@ public actor SessionStore: SessionManaging, SessionTokenProvider {
         state
     }
 
-    /// Always starts a fresh session: any earlier tokens and PIN are wiped first.
+    /// Always starts a fresh session: any earlier tokens, PIN and device key are wiped first.
+    /// Then the password, then binding this device; a failure anywhere leaves nothing behind.
     public func login(email: String, password: String) async throws(AuthError) -> SessionState {
         wipe()
         let started = generation
-        let issued = try await api.login(email: email, password: password)
+        let token = try await api.login(email: email, password: password)
         // Another sign-in or a sign-out happened while this one was on the network.
         guard started == generation else {
             throw .cancelled
         }
-        try save(issued)
-        tokens = issued
+        let bound: DeviceBinder.Bound
+        do throws(AuthError) {
+            bound = try await binder.bind(token)
+        } catch {
+            if started == generation {
+                wipe()
+            }
+            throw error
+        }
+        // The server now has a live session for this device; one dropped below is revoked.
+        guard started == generation else {
+            revoke(bound.session.tokens.refreshToken)
+            throw .cancelled
+        }
+        do throws(AuthError) {
+            try save(bound.session.tokens)
+            try saveDevice(bound.record)
+        } catch {
+            wipe()
+            revoke(bound.session.tokens.refreshToken)
+            throw error
+        }
+        tokens = bound.session.tokens
         state = .needsPIN
         return state
     }
@@ -225,8 +274,38 @@ public actor SessionStore: SessionManaging, SessionTokenProvider {
         return issued.accessToken
     }
 
-    // MARK: - Helpers
+    /// Signed out in memory first, so a failed delete can never leave the app unlocked.
+    /// A PIN record that survives a failed delete has `attemptsLeft == 0` or no tokens, and
+    /// is wiped again at the next launch.
+    ///
+    /// Then the server is asked to revoke the tokens: on sign-out, after too many wrong PINs,
+    /// and for a session left by an earlier install. It runs on its own task, so signing out
+    /// never waits on the network; if it fails, the tokens still expire on the server.
+    private func wipe() {
+        let refreshToken = tokens?.refreshToken ?? (try? loadTokens())?.refreshToken
+        generation += 1
+        tokens = nil
+        state = .signedOut
+        try? store.remove(Key.tokens)
+        try? store.remove(Key.pin)
+        try? store.remove(DeviceRecord.storeKey)
+        deviceKey.remove()
+        if let refreshToken {
+            revoke(refreshToken)
+        }
+    }
 
+    /// Best effort, on its own task: signing out never waits on the network.
+    private func revoke(_ refreshToken: String) {
+        Task { [api] in
+            try? await api.logout(refreshToken: refreshToken)
+        }
+    }
+}
+
+// MARK: - Helpers
+
+extension SessionStore {
     /// Six ASCII digits. Checked on UTF-8 bytes: a `Character` check lets "1\u{301}" through.
     static func isValidPIN(_ pin: String) -> Bool {
         pin.utf8.count == 6
@@ -289,6 +368,14 @@ public actor SessionStore: SessionManaging, SessionTokenProvider {
         }
     }
 
+    private func saveDevice(_ record: DeviceRecord) throws(AuthError) {
+        do {
+            try store.set(try JSONEncoder().encode(record), for: DeviceRecord.storeKey)
+        } catch {
+            throw .storageUnavailable
+        }
+    }
+
     private func loadPIN() throws -> PINRecord? {
         guard let data = try store.data(for: Key.pin) else {
             return nil
@@ -302,53 +389,6 @@ public actor SessionStore: SessionManaging, SessionTokenProvider {
         } catch {
             throw .storageUnavailable
         }
-    }
-
-    /// Signed out in memory first, so a failed delete can never leave the app unlocked.
-    /// A PIN record that survives a failed delete has `attemptsLeft == 0` or no tokens, and
-    /// is wiped again at the next launch.
-    ///
-    /// Then the server is asked to revoke the tokens: on sign-out, after too many wrong PINs,
-    /// and for a session left by an earlier install. It runs on its own task, so signing out
-    /// never waits on the network; if it fails, the tokens still expire on the server.
-    private func wipe() {
-        let refreshToken = tokens?.refreshToken ?? (try? loadTokens())?.refreshToken
-        generation += 1
-        tokens = nil
-        state = .signedOut
-        try? store.remove(Key.tokens)
-        try? store.remove(Key.pin)
-        if let refreshToken {
-            Task { [api] in
-                try? await api.logout(refreshToken: refreshToken)
-            }
-        }
-    }
-}
-
-// MARK: - State updates
-
-extension SessionStore {
-    /// Only the newest state is buffered: a listener that falls behind needs where the
-    /// session is now, not every step on the way.
-    public func stateUpdates() async -> AsyncStream<SessionState> {
-        let (stream, continuation) = AsyncStream.makeStream(
-            of: SessionState.self,
-            bufferingPolicy: .bufferingNewest(1)
-        )
-        let id = UUID()
-        listeners[id] = continuation
-        continuation.yield(state)
-        continuation.onTermination = { [weak self] _ in
-            Task {
-                await self?.removeListener(id)
-            }
-        }
-        return stream
-    }
-
-    private func removeListener(_ id: UUID) {
-        listeners[id] = nil
     }
 }
 

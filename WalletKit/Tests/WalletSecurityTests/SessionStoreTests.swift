@@ -12,7 +12,7 @@ import Testing
         #expect(try await store.login(email: "demo@wallet.test", password: "pw") == .needsPIN)
         #expect(try await store.createPIN("123456") == .unlocked)
         #expect(await store.accessToken() == "a1")
-        #expect(storage.keys == [SessionStore.Key.tokens, SessionStore.Key.pin])
+        #expect(storage.keys == sessionKeys)
     }
 
     @Test func wrongCredentialsLeaveNothingStored() async {

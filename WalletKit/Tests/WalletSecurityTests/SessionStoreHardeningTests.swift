@@ -15,7 +15,7 @@ import Testing
         let relaunched = makeStore(storage: storage)
 
         #expect(await relaunched.restore() == .locked)
-        #expect(storage.keys == [SessionStore.Key.tokens, SessionStore.Key.pin])
+        #expect(storage.keys == sessionKeys)
 
         storage.fail()
         #expect(try await relaunched.unlock(pin: "123456") == .unlocked)
@@ -127,7 +127,8 @@ import Testing
         while await api.refreshedWith.isEmpty {
             await Task.yield()
         }
-        await api.setLogin(.success(SessionTokens(accessToken: "b1", refreshToken: "rb1")))
+        await api.setBind(
+            .success(BoundSession(deviceID: "dev-b", tokens: SessionTokens(accessToken: "b1", refreshToken: "rb1"))))
         _ = try await store.login(email: "b@wallet.test", password: "pw")
         await gate.open()
 

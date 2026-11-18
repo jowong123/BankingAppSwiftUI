@@ -96,7 +96,10 @@ actor Gate {
 
 /// Scripted `AuthAPI`. A refresh can be held at a gate so a test can sign out meanwhile.
 actor FakeAuthAPI: AuthAPI {
-    var loginResult: Result<SessionTokens, AuthError> = .success(SessionTokens(accessToken: "a1", refreshToken: "r1"))
+    var loginResult: Result<BindingToken, AuthError> = .success(BindingToken("b1"))
+    var bindResult: Result<BoundSession, AuthError> = .success(
+        BoundSession(deviceID: "dev-1", tokens: SessionTokens(accessToken: "a1", refreshToken: "r1")))
+    private(set) var bindRequests: [DeviceBindingRequest] = []
     var refreshResult: Result<SessionTokens, AuthError> = .success(SessionTokens(accessToken: "a2", refreshToken: "r2"))
     private(set) var refreshedWith: [String] = []
     private var refreshGate: Gate?
@@ -121,8 +124,12 @@ actor FakeAuthAPI: AuthAPI {
         try logoutResult.get()
     }
 
-    func setLogin(_ result: Result<SessionTokens, AuthError>) {
+    func setLogin(_ result: Result<BindingToken, AuthError>) {
         loginResult = result
+    }
+
+    func setBind(_ result: Result<BoundSession, AuthError>) {
+        bindResult = result
     }
 
     func setRefresh(_ result: Result<SessionTokens, AuthError>, gate: Gate? = nil) {
@@ -130,8 +137,13 @@ actor FakeAuthAPI: AuthAPI {
         refreshGate = gate
     }
 
-    func login(email: String, password: String) async throws(AuthError) -> SessionTokens {
+    func login(email: String, password: String) async throws(AuthError) -> BindingToken {
         try loginResult.get()
+    }
+
+    func bindDevice(_ request: DeviceBindingRequest) async throws(AuthError) -> BoundSession {
+        bindRequests.append(request)
+        return try bindResult.get()
     }
 
     func refresh(refreshToken: String) async throws(AuthError) -> SessionTokens {
@@ -208,15 +220,79 @@ final class FakeBiometrics: BiometricAuthenticator {
     }
 }
 
+/// Everything a signed-in session keeps: tokens, PIN, the bound device, and its signing key
+/// with the Face ID enrolment it was made under.
+let sessionKeys: Set<String> = [
+    SessionStore.Key.tokens, SessionStore.Key.pin, DeviceRecord.storeKey, SoftwareKey.storeKey,
+    KeyEnrollment.storeKey,
+]
+
 /// A real hasher with few iterations, so tests stay fast. Production uses 600,000.
 let fastHasher = PINHasher(iterations: 1_000)
 
 func makeStore(
     api: FakeAuthAPI = FakeAuthAPI(),
     storage: InMemoryStore = InMemoryStore(),
-    biometrics: FakeBiometrics = FakeBiometrics()
+    biometrics: FakeBiometrics = FakeBiometrics(),
+    attestor: FakeAttestor = FakeAttestor(supported: false)
 ) -> SessionStore {
-    SessionStore(api: api, store: storage, biometrics: biometrics, hasher: fastHasher)
+    SessionStore(
+        api: api,
+        store: storage,
+        biometrics: biometrics,
+        deviceKey: SoftwareKey(store: storage, biometrics: biometrics),
+        attestor: attestor,
+        hasher: fastHasher
+    )
+}
+
+/// App Attest that answers with fixed bytes, or reports itself unsupported like the simulator.
+final class FakeAttestor: AppAttesting {
+    private struct Calls {
+        var attestedHashes: [Data] = []
+        var assertedHashes: [Data] = []
+    }
+
+    let supported: Bool
+    private let calls = OSAllocatedUnfairLock(initialState: Calls())
+
+    init(supported: Bool) {
+        self.supported = supported
+    }
+
+    func isSupported() -> Bool {
+        supported
+    }
+
+    func generateKey() async throws -> String {
+        "attest-key"
+    }
+
+    func attestKey(_ keyID: String, clientDataHash: Data) async throws -> Data {
+        calls.withLock {
+            $0.attestedHashes.append(clientDataHash)
+        }
+        return Data("attestation".utf8)
+    }
+
+    func generateAssertion(_ keyID: String, clientDataHash: Data) async throws -> Data {
+        calls.withLock {
+            $0.assertedHashes.append(clientDataHash)
+        }
+        return Data("assertion".utf8)
+    }
+
+    var attestedHashes: [Data] {
+        calls.withLock {
+            $0.attestedHashes
+        }
+    }
+
+    var assertedHashes: [Data] {
+        calls.withLock {
+            $0.assertedHashes
+        }
+    }
 }
 
 /// Signed in with PIN 123456, then locked.
