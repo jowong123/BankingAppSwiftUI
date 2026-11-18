@@ -15,6 +15,9 @@ public enum HTTPError: Error, Hashable, Sendable {
     /// The 2xx body didn't match the expected type. Holds the coding path only, never
     /// values, so it can be logged without leaking response data.
     case decoding(path: String)
+    /// The server's certificate chain had none of the pinned keys (ADR-006). The connection
+    /// was closed before the request was sent. Never retried, never shown as a cancel.
+    case pinningFailed
     /// The request couldn't be turned into a URL, or the response wasn't HTTP.
     case invalidRequest
     case invalidResponse
