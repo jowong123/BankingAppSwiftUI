@@ -1,4 +1,5 @@
 import Domain
+import Foundation
 
 /// `TransfersRepository` over the Wallet API: recipients and quotes for the send-money
 /// screens. Turns `APIError` into `TransferError`, so TransferFeature never sees HTTP.
@@ -25,6 +26,14 @@ public struct RemoteTransfersRepository: TransfersRepository {
             if case .server(_, "invalid_request", _, _) = error {
                 throw .amountNotAllowed
             }
+            throw error.transferError
+        }
+    }
+
+    public func challenge(transferID: UUID) async throws(TransferError) -> SigningChallenge {
+        do {
+            return try await api.challenge(transferID: transferID)
+        } catch {
             throw error.transferError
         }
     }

@@ -95,3 +95,26 @@ extension TransferDTO {
         }
     }
 }
+
+struct ChallengeDTO: Decodable, Sendable {
+    let nonce: String
+    let expiresAt: Date
+
+    var challenge: SigningChallenge {
+        SigningChallenge(nonce: nonce, expiresAt: expiresAt)
+    }
+}
+
+/// The signed confirm. `payload` is the exact signed bytes, so the server checks the
+/// signature without re-creating the app's JSON.
+struct ConfirmRequestDTO: Encodable, Sendable {
+    let payload: String
+    let signature: String
+    let assertion: String?
+
+    init(_ confirmation: SignedConfirmation) {
+        payload = confirmation.payload.base64EncodedString()
+        signature = confirmation.signature.base64EncodedString()
+        assertion = confirmation.assertion?.base64EncodedString()
+    }
+}

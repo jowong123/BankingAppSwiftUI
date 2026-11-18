@@ -1,3 +1,4 @@
+import Domain
 import Foundation
 
 struct LoginRequestDTO: Encodable, Sendable, CustomStringConvertible, CustomReflectable {
@@ -53,5 +54,64 @@ struct SessionTokensDTO: Decodable, Hashable, Sendable, CustomStringConvertible,
     /// Empty, so `dump`, debuggers and test-failure diffs can't print the tokens either.
     var customMirror: Mirror {
         Mirror(self, children: [:])
+    }
+}
+
+/// Login's answer: a single-use token for `POST /v1/devices`, not a session.
+struct BindingTokenDTO: Decodable, Sendable, CustomStringConvertible, CustomReflectable {
+    let bindingToken: String
+    let expiresIn: Int
+
+    var description: String {
+        "BindingTokenDTO(<redacted>)"
+    }
+    var customMirror: Mirror {
+        Mirror(self, children: [:])
+    }
+}
+
+/// `POST /v1/devices`. Keys and attestation objects are base64.
+struct DeviceBindingRequestDTO: Encodable, Sendable, CustomStringConvertible, CustomReflectable {
+    let bindingToken: String
+    let signingKey: String?
+    let attestation: AttestationDTO?
+
+    init(_ request: DeviceBindingRequest) {
+        bindingToken = request.bindingToken.value
+        signingKey = request.signingKey?.base64EncodedString()
+        attestation = request.attestation.map {
+            AttestationDTO(keyId: $0.keyID, object: $0.object.base64EncodedString())
+        }
+    }
+
+    var description: String {
+        "DeviceBindingRequestDTO(<redacted>)"
+    }
+    var customMirror: Mirror {
+        Mirror(self, children: [:])
+    }
+}
+
+struct AttestationDTO: Encodable, Sendable {
+    let keyId: String
+    let object: String
+}
+
+/// The session for the newly bound device.
+struct BoundDeviceDTO: Decodable, Sendable, CustomStringConvertible, CustomReflectable {
+    let deviceId: String
+    let accessToken: String
+    let refreshToken: String
+    let expiresIn: Int
+
+    var description: String {
+        "BoundDeviceDTO(<redacted>)"
+    }
+    var customMirror: Mirror {
+        Mirror(self, children: [:])
+    }
+
+    func session() -> BoundSession {
+        BoundSession(deviceID: deviceId, tokens: SessionTokens(accessToken: accessToken, refreshToken: refreshToken))
     }
 }

@@ -16,6 +16,8 @@ public enum APIError: Error, Hashable, Sendable {
     case invalidResponse(String)
     /// The call couldn't be built, e.g. an ID with characters not allowed in a path.
     case invalidRequest
+    /// The server's certificate didn't match a pinned key (ADR-006). Nothing was sent.
+    case pinningFailed
     case cancelled
 
     /// Server error codes that mean "this request was rejected and changed nothing".
@@ -24,6 +26,9 @@ public enum APIError: Error, Hashable, Sendable {
         "bad_request", "invalid_request", "not_found", "declined",
         "quote_expired", "quote_used", "insufficient_funds",
         "idempotency_key_required", "idempotency_mismatch",
+        // The confirm's approval was refused (SPEC section 6); the transfer stays unconfirmed.
+        "signature_required", "invalid_signature", "payload_mismatch", "invalid_nonce", "nonce_used",
+        "nonce_expired", "assertion_invalid", "device_not_bound",
     ]
 
     /// `true` only when the server explicitly rejected the call, or it never left the
@@ -74,6 +79,8 @@ extension APIError {
             return .invalidResponse(path)
         case .invalidRequest:
             return .invalidRequest
+        case .pinningFailed:
+            return .pinningFailed
         case .invalidResponse:
             return .invalidResponse("not HTTP")
         case .status(let status, let body):

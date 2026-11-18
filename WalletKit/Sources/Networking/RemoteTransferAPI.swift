@@ -26,9 +26,11 @@ public struct RemoteTransferAPI: TransferAPI {
         }
     }
 
-    public func confirm(id: UUID) async throws(TransferAPIError) -> RemoteTransferStatus {
+    public func confirm(id: UUID, confirmation: SignedConfirmation) async throws(TransferAPIError)
+        -> RemoteTransferStatus
+    {
         do {
-            return try await api.confirmTransfer(id: id).remoteStatus
+            return try await api.confirmTransfer(id: id, confirmation: confirmation).remoteStatus
         } catch {
             throw error.transferAPIError(notFound: .notFound)
         }

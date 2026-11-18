@@ -1,12 +1,21 @@
+import Domain
 import Foundation
 import NetworkingKit
 
-/// The Wallet API routes (SPEC section 7, `backend/openapi.yaml`). Device binding and
-/// signing routes arrive in Phase 7.
+/// The Wallet API routes (SPEC section 7, `backend/openapi.yaml`).
 enum WalletEndpoints {
-    static func login(email: String, password: String) throws(APIError) -> Endpoint<SessionTokensDTO> {
+    static func login(email: String, password: String) throws(APIError) -> Endpoint<BindingTokenDTO> {
         try post(
             "/v1/auth/login", body: LoginRequestDTO(email: email, password: password), requiresAuthentication: false)
+    }
+
+    /// Never retried: the binding token works once, so a resend after a lost response would
+    /// be refused anyway; the user signs in again instead.
+    static func bindDevice(_ request: DeviceBindingRequest) throws(APIError) -> Endpoint<BoundDeviceDTO> {
+        var endpoint: Endpoint<BoundDeviceDTO> = try post(
+            "/v1/devices", body: DeviceBindingRequestDTO(request), requiresAuthentication: false)
+        endpoint.request.allowsRetry = false
+        return endpoint
     }
 
     /// Never retried: the server rotates refresh tokens, so resending one whose response
@@ -62,12 +71,19 @@ enum WalletEndpoints {
         return endpoint
     }
 
-    /// No body. The server only changes an unconfirmed transfer, so repeats are safe. The key
-    /// is fixed per transfer, like the create's, so every retry is recognisably the same
-    /// confirm (Phase 7 ties the signed nonce to it too).
-    static func confirmTransfer(id: String) throws(APIError) -> Endpoint<TransferDTO> {
+    /// A new nonce on every call, so a retry just gets another one.
+    static func challenge(id: String) throws(APIError) -> Endpoint<ChallengeDTO> {
+        try post("/v1/transfers/\(try pathID(id))/challenge", body: EmptyRequestDTO())
+    }
+
+    /// The signed approval, identical on every retry. The server only changes an unconfirmed
+    /// transfer, so repeats are safe. The key is fixed per transfer, like the create's, so
+    /// every retry is recognisably the same confirm.
+    static func confirmTransfer(id: String, confirmation: SignedConfirmation) throws(APIError)
+        -> Endpoint<TransferDTO>
+    {
         var endpoint: Endpoint<TransferDTO> = try post(
-            "/v1/transfers/\(try pathID(id))/confirm", body: EmptyRequestDTO())
+            "/v1/transfers/\(try pathID(id))/confirm", body: ConfirmRequestDTO(confirmation))
         endpoint.request.setHeader(HTTPHeader.idempotencyKey, "\(id).confirm")
         return endpoint
     }

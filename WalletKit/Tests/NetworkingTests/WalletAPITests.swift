@@ -76,7 +76,7 @@ let transferJSON = """
         let api = try makeAPI(transport)
 
         let quote = try await api.createQuote(
-            sourceAmount: Money(amountMinor: 10_000, currency: .sgd), targetCurrency: .usd)
+            sourceAmount: Money(amountMinor: 10_000, currency: .sgd), targetCurrency: .usd, now: Self.beforeExpiry)
 
         #expect(quote.targetAmount == Money(amountMinor: 7_301, currency: .usd))
         let sent = try body(of: try #require(await transport.requests.first))
@@ -84,6 +84,30 @@ let transferJSON = """
         #expect(source["amountMinor"] as? Int == 10_000)
         #expect(source["currency"] as? String == "SGD")
         #expect(sent["targetCurrency"] as? String == "USD")
+    }
+
+    static let beforeExpiry = Date(timeIntervalSince1970: 1_793_008_740)  // 2026-10-26T09:59:00Z
+
+    /// The app checks the server's maths before showing a quote the user will sign (Phase 3
+    /// carry-over): (10000 - 150) x 0.7411 = 7299.8, so 7300 or within one unit is right.
+    @Test(arguments: [
+        (7_400, 150, "2026-10-26T10:00:30Z"),  // target too high for the rate
+        (7_301, 10_000, "2026-10-26T10:00:30Z"),  // fee eats the whole amount
+        (7_301, -1, "2026-10-26T10:00:30Z"),  // negative fee
+        (7_301, 150, "2026-10-26T09:58:59Z"),  // already expired
+    ])
+    func quoteThatDoesNotAddUpIsRefused(target: Int, fee: Int, expiresAt: String) async throws {
+        let quoteJSON = """
+            {"id":"q_1","sourceAmount":{"amountMinor":10000,"currency":"SGD"},
+             "targetAmount":{"amountMinor":\(target),"currency":"USD"},"fee":{"amountMinor":\(fee),"currency":"SGD"},
+             "rate":"0.7411","expiresAt":"\(expiresAt)"}
+            """
+        let api = try makeAPI(StubTransport([status(201, quoteJSON)]))
+
+        await #expect(throws: APIError.invalidResponse("quote does not add up")) {
+            try await api.createQuote(
+                sourceAmount: Money(amountMinor: 10_000, currency: .sgd), targetCurrency: .usd, now: Self.beforeExpiry)
+        }
     }
 
     @Test func accountsSendBearerAndDecode() async throws {

@@ -34,7 +34,8 @@ extension APIError {
         switch self {
         case .transport where isOffline:
             .offline
-        case .transport:
+        // A key that doesn't match the pins: the server can't be trusted, so it isn't reached.
+        case .transport, .pinningFailed:
             .unavailable
         case .unauthorized:
             .sessionExpired

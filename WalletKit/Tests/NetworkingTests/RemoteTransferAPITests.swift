@@ -7,6 +7,8 @@ import Testing
 
 @Suite struct RemoteTransferAPITests {
     let id = UUID(uuidString: "6F1C2E1A-0000-4000-8000-000000000001") ?? UUID()
+    let confirmation = SignedConfirmation(
+        payload: Data(#"{"nonce":"n1"}"#.utf8), signature: Data([0x30, 0x44]), assertion: Data([0xA2, 0x01]))
 
     func draft() throws -> TransferDraft {
         let rate = try FXRate(source: .sgd, target: .usd, rate: 0.7341)
@@ -19,7 +21,8 @@ import Testing
             expiresAt: .now
         )
         let recipient = Recipient(id: "rcp_1", name: "Alice Tan", currency: .usd, accountLast4: "4821")
-        return TransferDraft(id: id, quote: quote, recipient: recipient, sourceAccountID: "acc_sgd")
+        return TransferDraft(
+            id: id, quote: quote, recipient: recipient, sourceAccountID: "acc_sgd", confirmation: confirmation)
     }
 
     @Test func createSendsTheTransferIDAsTheKeyAndReportsTheStatus() async throws {
@@ -34,18 +37,37 @@ import Testing
         #expect(try body(of: request)["recipientId"] as? String == "rcp_1")
     }
 
-    @Test func confirmPostsToTheTransfersConfirmRoute() async throws {
+    /// The signed bytes go as they are, base64, so the server checks exactly what was signed.
+    @Test func confirmPostsTheSignedApproval() async throws {
         let processing = transferJSON.replacingOccurrences(of: "awaiting_confirmation", with: "processing")
         let transport = StubTransport([status(200, processing)])
         let api = RemoteTransferAPI(api: try makeAPI(transport))
 
-        #expect(try await api.confirm(id: id) == .processing)
+        #expect(try await api.confirm(id: id, confirmation: confirmation) == .processing)
 
         let request = try #require(await transport.requests.first)
         #expect(request.httpMethod == "POST")
         #expect(request.url?.path() == "/v1/transfers/6f1c2e1a-0000-4000-8000-000000000001/confirm")
         #expect(
             request.value(forHTTPHeaderField: "Idempotency-Key") == "6f1c2e1a-0000-4000-8000-000000000001.confirm")
+        let sent = try body(of: request)
+        #expect(sent["payload"] as? String == confirmation.payload.base64EncodedString())
+        #expect(sent["signature"] as? String == "MEQ=")
+        #expect(sent["assertion"] as? String == "ogE=")
+    }
+
+    /// Every refusal of the approval is definite: the transfer fails, nothing moved.
+    @Test(arguments: [
+        ("nonce_expired", TransferFailure.approvalExpired), ("invalid_signature", .notApproved),
+        ("payload_mismatch", .notApproved), ("nonce_used", .notApproved), ("device_not_bound", .notApproved),
+    ])
+    func refusedApprovalFailsTheConfirm(code: String, failure: TransferFailure) async throws {
+        let refused = #"{"code":"\#(code)","message":"No","requestId":"r"}"#
+        let api = RemoteTransferAPI(api: try makeAPI(StubTransport([status(422, refused)])))
+
+        await #expect(throws: TransferAPIError.rejected(failure)) {
+            try await api.confirm(id: id, confirmation: confirmation)
+        }
     }
 
     @Test func failedStatusCarriesTheReason() async throws {
