@@ -190,7 +190,7 @@ cd backend && ATTEST_MODE=sandbox swift run WalletBackend serve
 ```
 
 1. Open `Wallet.xcodeproj` and run the **Wallet** scheme on an iOS 17+ simulator.
-2. In the Simulator menu, turn on **Features → Face ID → Enrolled**.
+2. In the Simulator menu, turn on **Features → Face ID → Enrolled**, Select Matched face when sending money.
 3. Sign in with `demo@wallet.test` / `sandbox-demo`.
 
 More in the [development guide](docs/DEVELOPMENT.md). Every decision, with its alternatives, is in [`docs/adr/`](docs/adr).
