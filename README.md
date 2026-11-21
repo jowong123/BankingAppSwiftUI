@@ -169,7 +169,6 @@ To check that the backend tests really catch problems, I turned off the signatur
 | 5 | Sign-in, PIN, Face ID, auto-lock |
 | 6 | Send flow, crash-safe outbox |
 | 7 | Device binding, Secure Enclave signing, App Attest, pinning |
-| 8–10 | *Planned:* NFC passport SDK, TestFlight and Sentry, demo video |
 
 ---
 
