@@ -171,16 +171,6 @@ A small Vapor service in Swift that does the **real** checks ([ADR-016](docs/adr
 
 ---
 
-## At scale, I'd add
-
-- **A step-up check for new devices,** such as SMS or a waiting period, against phished passwords.
-- **A server-verified PIN.**
-- **Tuist with binary caching** for a larger team.
-- **A hosted backend with real pins** (Release currently fails closed).
-- **App Attest's fraud risk metric and jailbreak signals** as risk scores.
-
----
-
 ## Quick start
 
 ```bash
