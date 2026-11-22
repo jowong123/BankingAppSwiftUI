@@ -1,0 +1,15 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<plist version="1.0">
+<dict>
+	<!-- No deployed backend yet (Phase 9). `.invalid` can never resolve, so a Release
+	     build fails closed instead of talking to an unknown host. -->
+	<key>WalletAPIBaseURL</key>
+	<string>https://api.wallet.invalid</string>
+	<!-- TLS key pins (ADR-006): base64 SHA-256 of the server's SubjectPublicKeyInfo, the
+	     current key and a backup key kept offline. Empty until the Phase 9 server exists,
+	     and an https host with no pins fails closed. -->
+	<key>WalletAPIPins</key>
+	<array/>
+</dict>
+</plist>

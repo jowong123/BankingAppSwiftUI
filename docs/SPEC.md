@@ -1,0 +1,366 @@
+# Wallet iOS — Project Spec
+
+Multi-currency wallet app for iOS with bank-grade security. Senior-level portfolio piece targeting DBS, Wise and Thales. Fake money and sandbox services only.
+
+**Out of scope:** real money movement, real bank integrations, Android, a production-grade backend. The backend exists only to make the security flows real end to end.
+
+## 1. Goals by company
+
+| Company | What they look for | Features that prove it |
+| --- | --- | --- |
+| DBS | Security at scale, big-team engineering, accessibility | Modular SPM, threat model, device binding, CI |
+| Wise | Correct FX and fees, honest UX, ownership | Send flow with live quote, fee breakdown, rate lock, idempotent transfers |
+| Thales | Cryptography, device security, digital identity, SDK design | Secure Enclave signing, App Attest, NFC passport eKYC as a documented SDK |
+
+## 2. Tech stack
+
+| Area | Decision | Notes |
+| --- | --- | --- |
+| Language | Swift 6, strict concurrency in every module | No `@unchecked Sendable` without an ADR |
+| Min iOS | iOS 17 | `@Observable`, SwiftData, Swift Charts |
+| UI | SwiftUI-first | UIKit only behind wrappers (NFC, camera, screenshot masking) |
+| Architecture | MVVM + Coordinators | `@Observable` view models; no navigation logic in views |
+| Navigation | One `@Observable` router per flow owning a `NavigationPath` | App coordinator composes the flows |
+| Modularization | Local SPM package with App / Features / Core / SDK layers | Features never import features |
+| Project | Plain Xcode project + local `Package.swift` | Tuist noted in ADR-013 as the team-scale option |
+| Design system | Own `DesignSystem` package: tokens + components | Every component has previews |
+| Persistence | SwiftData for the transfer outbox, `.complete` file protection | No account data cached on device (ADR-017); secrets in Keychain only |
+| Networking | Custom `URLSession` client, async/await | Interceptors: auth, idempotency, signing, retry, pinning |
+| Backend | Vapor (Swift) + Fluent SQLite | FX quotes, transfers, signature verification |
+| DI | Manual constructor injection | Wired in the App composition root |
+| Unit tests | Swift Testing | Domain, view models, networking, security |
+| UI tests | XCUITest | Login and transfer flows |
+| CI/CD | GitHub Actions + Fastlane | Lint + test on PR; TestFlight on tag |
+| Lint | SwiftLint + swift-format | Enforced in CI |
+| Observability | OSLog with privacy redaction + Sentry | No PII in logs or crashes |
+| Languages | English only | Each feature's text in `Resources/en.lproj/Localizable.strings`, read through a `<Name>Strings` enum |
+| Docs | DocC for SDK and Core | ADRs in `docs/adr/` |
+
+## 3. Module structure
+
+```mermaid
+flowchart TD
+    App["Wallet app target<br/>AppCoordinator, AppEnvironment"]
+    subgraph Features["Features (never import each other)"]
+        Auth[AuthFeature]
+        Onb[OnboardingFeature]
+        Acc[AccountsFeature]
+        Tr[TransferFeature]
+    end
+    subgraph Core["Core"]
+        Domain
+        DesignSystem
+        Navigation
+        Networking
+        WalletSecurity
+        Persistence
+        Observability
+    end
+    subgraph SDK["SDK (standalone)"]
+        IdentitySDK
+    end
+    subgraph Pkg["NetworkingKit package (standalone, ADR-012)"]
+        NetworkingKit
+    end
+    App --> Features
+    Features --> Core
+    Onb --> IdentitySDK
+    Networking --> NetworkingKit
+```
+
+### Folder layout
+
+```
+Wallet/                      Xcode project (app target only)
+  WalletApp.swift
+  AppCoordinator.swift
+  AppEnvironment.swift       composition root, builds every dependency
+WalletKit/
+  Package.swift
+  Sources/
+    AuthFeature/  OnboardingFeature/  AccountsFeature/  TransferFeature/
+    Domain/  DesignSystem/  Navigation/  Networking/  WalletSecurity/
+    Persistence/  Observability/  IdentitySDK/
+  Tests/                     one test target per module
+NetworkingKit/               standalone package: generic HTTP client + interceptors (ADR-012)
+backend/                     Vapor service + openapi.yaml
+docs/
+  SPEC.md  adr/  threat-model.md
+.github/workflows/
+fastlane/
+```
+
+### Dependency rules
+
+| Module | May import | Must not import |
+| --- | --- | --- |
+| Any Feature | Domain, DesignSystem, Navigation, Observability | Any other Feature; Networking, Persistence, WalletSecurity (use Domain protocols, ADR-004) |
+| OnboardingFeature | Core + IdentitySDK | Other Features |
+| Domain | Foundation only | Everything else |
+| DesignSystem | SwiftUI + Domain | Features, Networking, WalletSecurity |
+| Networking | Domain, Observability, NetworkingKit | Features, DesignSystem |
+| WalletSecurity, Persistence | Domain, Observability | Features, DesignSystem, NetworkingKit |
+| NetworkingKit (separate package) | Foundation only | Anything in WalletKit |
+| Observability | Foundation, OSLog, Sentry | Everything in WalletKit |
+| IdentitySDK | Apple frameworks only (CoreNFC, CryptoKit) | Anything in WalletKit |
+
+Enforced by `Package.swift` target dependencies, so a forbidden import fails to compile. Only `Networking` depends on `NetworkingKit`; it holds the Wallet endpoints and DTOs, and NetworkingKit holds the generic HTTP machinery (ADR-012).
+
+`WalletSecurity` is named that way, not `Security`, because a module called `Security` shadows Apple's Security.framework (Keychain, `SecKey`) and breaks the build.
+
+## 4. Architecture
+
+**Layers inside a feature**
+- **View** (SwiftUI): renders state, forwards actions. No business logic; navigates only through the router.
+- **ViewModel** (`@Observable`, `@MainActor`): one `State` value, calls use cases, maps errors to `UserFacingError`.
+- **Use case / Repository**: protocols in Domain, implementations in Core. Async, `Sendable`.
+- **Router** (`@Observable`, one per flow): owns `NavigationPath` plus sheet and full-screen-cover state.
+
+**Navigation**
+- Each feature defines a `Route` enum (`Hashable`) and a `Router` with `push`, `pop`, `popToRoot`, `present`, `dismiss`.
+- Each feature exposes one public entry view, e.g. `TransferFlowView(router:dependencies:onFinish:)`.
+- Cross-feature navigation is an output closure (e.g. Accounts calls `onSendMoney(accountID)`); `AppCoordinator` decides.
+- The top-level flow (sign in, create PIN, unlock, accounts) is swapped by `AppCoordinator` from the `SessionState`, never pushed, so there is no "back" past the lock screen (ADR-020).
+- Deep links (`wallet://transfer?to=...`) are parsed in `Navigation` into an `AppRoute`, handled by `AppCoordinator`.
+- Sensitive flows re-authenticate before the route is pushed.
+
+**Dependency injection**
+- Each feature declares a `Dependencies` struct of protocols.
+- `AppEnvironment` builds concrete implementations once and passes them down through initialisers (ADR-005). It reads the backend URL from `WalletAPIBaseURL` in the build's Info.plist (ADR-021).
+- Previews and tests pass mocks. No singletons, no service locator.
+
+**Concurrency**
+- Swift 6 language mode, complete strict concurrency everywhere.
+- UI types are `@MainActor`. Shared mutable state lives in actors: `SessionStore`, `TransferOutbox`.
+- Domain models are `Sendable` value types. Leaving a screen cancels its `.task {}` work.
+
+**App lifecycle**
+- Background → opaque privacy cover over the window (no balances in the app switcher). A blur can still show the shape of large numbers. The cover stays up on return until the lock decision is made.
+- Inactive 5 minutes, or 2 minutes in background → session locks, requires Face ID or PIN. Measured with a monotonic clock (`ContinuousClock`), so changing the device's time can't stop it. An unfinished PIN setup times out to signed out instead.
+- Launch → integrity signal, restore session, resume pending transfers from the outbox.
+
+## 5. Domain model
+
+**Core types**
+- `Currency`: ISO 4217 code + `minorUnits` (SGD 2, JPY 0, KWD 3).
+- `Money`: `amount: Decimal` + `currency`. Arithmetic only between equal currencies (throws otherwise). Banker's rounding to minor units. Converts to/from `amountMinor: Int64`. Provides `formatted(locale:)` and `accessibilityLabel`.
+- `FXQuote`: `id`, `sourceAmount`, `targetAmount`, `rate`, `fee`, `expiresAt`. The fee is in the source currency and is deducted before conversion: `targetAmount = round((sourceAmount − fee) × rate)`. The user is debited exactly `sourceAmount`.
+- `Transfer`: `id` (client UUID, also the idempotency key), `quote`, `recipient`, `state`, `createdAt`, `updatedAt`.
+
+**Transfer state machine**
+
+```mermaid
+stateDiagram-v2
+    [*] --> Draft
+    Draft --> Quoted: quote received
+    Quoted --> Expired: 30 s lock ends
+    Expired --> Quoted: re-quote
+    Quoted --> Authorised: Face ID + sign
+    Authorised --> Submitted: confirm sent
+    Authorised --> Failed: create refused
+    Submitted --> Processing: server accepted
+    Submitted --> Failed: rejected
+    Processing --> Completed: settled
+    Processing --> Failed: declined
+    Completed --> [*]
+    Failed --> [*]
+```
+
+| State | Entered when | User sees |
+| --- | --- | --- |
+| Draft | Recipient and amount chosen | Amount screen |
+| Quoted | Server returns an FX quote | Rate, fee, receive amount, 30 s countdown |
+| Expired | Quote lock passes before confirm | "Rate updated" and the new quote, never a silent change |
+| Authorised | Send tapped, approved with Face ID and signed (ADR-023), then saved; the create is sent | "Sending", safe to leave the app |
+| Submitted | Signed confirm request sent | Spinner; safe to leave the app |
+| Processing | Server accepted, settlement pending | "On its way" with estimated arrival |
+| Completed | Server reports settled | Success screen and receipt |
+| Failed | Server rejects or declines | Clear reason and next step, balance unchanged |
+
+**Rules**
+- Transitions are a pure function `next(state, event) -> State` in Domain, tested for every valid and invalid pair.
+- Every transition is written to the `TransferOutbox` actor (SwiftData-backed) before the network call.
+- On launch, the outbox resumes every unfinished transfer: Authorised → create, Submitted → confirm, Processing → poll `GET /v1/transfers/{id}`. Every call is safe to repeat. A timeout is never treated as Failed; the outbox waits (2 s doubling to 30 s) and asks again (`TransferRecovery`, ADR-022).
+- The outbox is deleted when the session ends. Sign-out asks first if a transfer is still sending.
+
+## 6. Security design
+
+**Device binding (every sign-in)**
+1. Sandbox login (email + password) returns a single-use binding token, valid 5 minutes.
+2. App generates a P-256 key in the Secure Enclave with access control `.biometryCurrentSet` + `.privateKeyUsage`. No Face ID or Touch ID: no key; the device can view but not send.
+3. App runs App Attest (client data: binding token + public key) and sends the binding token, public key and attestation to `POST /v1/devices`.
+4. Server verifies the attestation, stores the public key against user + device, and issues session tokens tied to that device (ADR-008, ADR-024).
+
+**Transaction signing (every transfer, at the Send tap, ADR-023)**
+1. `POST /v1/transfers/{id}/challenge` for the app's own transfer ID, before the create, returns a single-use nonce valid 60 s.
+2. App builds a canonical payload: transfer ID, amountMinor, currency, recipient ID, quote ID, nonce, timestamp (sorted-key JSON, no whitespace).
+3. Face ID unlocks the key; app signs SHA-256 of the payload with ECDSA, and adds an App Attest assertion over the same bytes.
+4. The outbox saves the signed approval, creates the transfer, and sends the payload bytes + signature + assertion to `POST /v1/transfers/{id}/confirm`, unchanged on every retry.
+5. Server verifies the signature with the session's device key, that the payload matches the stored transfer, the nonce (issued for this transfer and device, unexpired, used up now) and the assertion counter. A refusal changes nothing.
+
+The simulator has no Secure Enclave or App Attest: it signs with a key it generates itself behind the same Face ID rules, and the server skips App Attest only when started with `ATTEST_MODE=sandbox` (ADR-023).
+
+Biometric enrolment change invalidates the key (`.biometryCurrentSet`); the user must re-bind. The app explains this when Send money opens and offers "Sign in again", which binds a new key.
+
+**Storage**
+- Keychain (`kSecAttrAccessibleWhenUnlockedThisDeviceOnly`): access token, refresh token, device ID and App Attest key ID, the Face ID enrolment the signing key was made under, and the app PIN's salted PBKDF2 hash with its attempts left (ADR-019).
+- Secure Enclave: signing private key, never exported. The Keychain holds only CryptoKit's handle to it, usable on this device's Secure Enclave alone.
+- SwiftData: `.complete` file protection; the transfer outbox only. Balances and transactions are never stored on the device (ADR-017).
+- Never: UserDefaults for sensitive data, secrets in source, PII in logs.
+
+**Network**
+- TLS public-key pinning (SPKI hash) with a backup pin (ADR-006), from `WalletAPIPins` in Info.plist. An https host with no pins fails closed; a pin mismatch is reported as such, never as a cancel.
+- `Idempotency-Key` on every mutating call; request ID on every call.
+- 401 → one token refresh. If the server refuses the refresh token, the session is signed out and wiped (not just locked): the tokens are no longer valid.
+
+**Integrity**
+- App Attest assertions on device binding and transfer confirm.
+- Jailbreak heuristics are a risk signal sent to the server, not a hard block (ADR-007).
+- Screenshot / screen-recording masking on balance, transfer review and PIN screens.
+- Secure entry for PIN; `.oneTimeCode` content type for OTP.
+
+**Threat model summary** (full version: `docs/threat-model.md`)
+
+| Threat | Example | Mitigation |
+| --- | --- | --- |
+| Stolen unlocked phone | Thief opens the app | Session lock, Face ID re-auth on every transfer |
+| Man in the middle | Proxy on public Wi-Fi | TLS pinning, signed payloads |
+| Replay | Captured confirm resent | Single-use nonce, 60 s expiry, idempotency key |
+| Tampered app | Repackaged binary calling the API | App Attest on binding and confirm |
+| Remote-access / overlay scam | Scammer guides a victim | Screen-recording detection, cooling-off for new payees, warning copy |
+| Data leak | Account number in a crash report | OSLog `.private`, Sentry scrubbing, `print` banned |
+| Biometric change | Attacker adds a fingerprint | App unlock: Face ID refused until the PIN is entered (ADR-019). Signing key invalidated; re-binding required |
+| Token resurrection | A refresh finishing after sign-out restores the old session | Session generation counter drops late results (`SessionStore`) |
+| Stolen access token | Token lifted from a proxy log confirms a transfer | Confirm needs a Secure Enclave signature behind Face ID and a fresh nonce (ADR-008) |
+| Tampered amount | Request rewritten to send more than the user saw | Amount is in the signed payload; server compares it with the stored transfer |
+| Outbox read from a locked phone | Device seized while a transfer is pending | `.complete` file protection, excluded from backups, deleted at sign-out (ADR-009) |
+| Copied token after sign-out | Token lifted from a backup or proxy log is used later | Sign-out, five wrong PINs and a reinstall revoke the session on the server (`POST /v1/auth/logout`, best effort) |
+
+## 7. Backend API (Vapor)
+
+Small Vapor service in `backend/`, Fluent SQLite, seeded fake accounts, simulated FX rates. `backend/openapi.yaml` is the source of truth.
+
+| Method | Path | Purpose | Notes |
+| --- | --- | --- | --- |
+| POST | `/v1/auth/login` | Sandbox login | Single-use binding token (5 min) |
+| POST | `/v1/auth/refresh` | Refresh access token | Rotates refresh token |
+| POST | `/v1/auth/logout` | Sign out | Revokes the session's tokens; always 204 |
+| POST | `/v1/devices` | Bind device | Binding token + public key + attestation; returns session tokens tied to the device |
+| GET | `/v1/accounts` | Balances per currency | Minor units |
+| GET | `/v1/accounts/{id}/transactions` | History | Cursor pagination |
+| GET | `/v1/recipients` | Saved payees | |
+| POST | `/v1/quotes` | FX quote | Rate, fee, receive amount, `expiresAt` (30 s) |
+| POST | `/v1/transfers` | Create from quote | Requires `Idempotency-Key` |
+| POST | `/v1/transfers/{id}/challenge` | Signing nonce | Single use, 60 s, per transfer and device; asked for before the create |
+| POST | `/v1/transfers/{id}/confirm` | Moves the money | Verifies signature, payload, nonce and assertion (ADR-008). Safe to repeat. Fails `quote_expired` more than 2 min after the quote expired |
+| GET | `/v1/transfers/{id}` | Status | Polled while pending. Sandbox settles 3 s after confirm; `rcp_decline_eur` is declined and refunded |
+
+**Conventions**
+- Money: `{ "amountMinor": 125000, "currency": "SGD" }`. Never floats.
+- Errors: `{ "code": "quote_expired", "message": "...", "requestId": "..." }`.
+- Same `Idempotency-Key` with the same body (compared as JSON, key order ignored) returns the original response.
+- Simulation headers: `X-Sim-Delay: <ms>`, `X-Sim-Fail: network|server|declined`. Off unless the server runs with `SIMULATION_HEADERS=on`.
+
+## 8. Testing, CI/CD, observability
+
+| Layer | Tool | What to cover | Target |
+| --- | --- | --- | --- |
+| Domain | Swift Testing | Money rounding, FX, every state transition | 90%+ |
+| View models | Swift Testing | State per action, error mapping, cancellation | 80%+ |
+| NetworkingKit | Swift Testing + `URLProtocol` stub | Interceptors, retry, idempotency reuse, 401 refresh, redirects refused | 80%+ |
+| Networking | Swift Testing | Endpoints, DTO ↔ Domain mapping, error and outcome classification, refresh failure mapping | 80%+ |
+| WalletSecurity | Swift Testing | Canonical payload, sign/verify round trip (software key), Keychain | 80%+ |
+| Backend | XCTVapor | Signature verification, nonce reuse, idempotency, quote expiry | 80%+ |
+| UI flows | XCUITest | Login → balance; send → confirm → success; quote expired; network failure mid-transfer | Key flows |
+
+UI tests use launch arguments `-uiTesting -mockServer` for a deterministic mock.
+
+**CI/CD**
+1. `pr.yml`: SwiftLint, swift-format lint, `swift test`, `fastlane test`, backend tests.
+2. Coverage summary on the PR.
+3. `release.yml` on `v*` tag: `fastlane beta` (match signing) → TestFlight.
+4. Fail if app size grows >10% without a label.
+
+## 9. ADRs
+
+Template: `docs/adr/000-template.md`.
+
+| ADR | Decision | Main alternative rejected |
+| --- | --- | --- |
+| 001 | SwiftUI-first, UIKit only behind wrappers | UIKit coordinators hosting SwiftUI |
+| 002 | MVVM + Coordinators with `@Observable` | TCA |
+| 003 | One router per flow owning `NavigationPath` | Navigation inside views |
+| 004 | Local SPM modules; features never import features | Single target with folders |
+| 005 | Manual constructor injection | swift-dependencies, Factory |
+| 006 | TLS public-key pinning with backup pin | Certificate pinning, none |
+| 007 | Jailbreak detection as risk signal | Blocking the app |
+| 008 | Secure Enclave signing with `.biometryCurrentSet` | Biometric gate + bearer token only |
+| 009 | SwiftData with `.complete` file protection | GRDB + SQLCipher |
+| 010 | Money as `Decimal`, minor units at API boundary | `Double`, integer-only in app |
+| 011 | Transfer state machine with persisted outbox | Ad-hoc flags |
+| 012 | Custom `URLSession` client with interceptors, in standalone `NetworkingKit` | Alamofire; target inside WalletKit |
+| 013 | Plain Xcode + local SPM; Tuist at team scale | Tuist from day one |
+| 014 | Swift 6 strict concurrency everywhere | Swift 5 mode in some modules |
+| 015 | OSLog + Sentry with scrubbing | Firebase Crashlytics |
+| 016 | Sandbox backend: SQLKit rows, hashed rotating tokens with grace window, two-layer idempotency | Fluent models with `@unchecked Sendable`; JWT; middleware-only idempotency |
+| 017 | No offline cache of account data; Accounts is online only | SwiftData cache of balances (and recent history) |
+| 018 | Debug-only ATS exception (`NSAllowsLocalNetworking`) for the local sandbox backend | Local HTTPS with a self-signed certificate; exception in all builds |
+| 019 | App PIN checked on device: PBKDF2 hash in Keychain, 5 attempts then wipe | Device passcode fallback; server-verified PIN |
+| 020 | App root swapped from `SessionState` by `AppCoordinator` | One navigation stack; lock screen as a full-screen cover |
+| 021 | Backend URL per build configuration in Info.plist | Swift constant behind `#if DEBUG`; xcconfig variable |
+| 022 | Unsigned confirm until Phase 7 (superseded by 008); outbox recovery rule | Stop at "created"; a stub signature |
+| 023 | Sign at the Send tap; simulator signs with a self-generated key, server `ATTEST_MODE=sandbox` | Sign when the outbox confirms; a fixed demo key |
+| 024 | App Attest verified on the server with swift-certificates | Third-party App Attest package; DeviceCheck only |
+
+## 10. Build plan (10 weeks)
+
+Run each phase with `/phase <n>`. Review every diff before committing.
+
+### Phase 1 (week 1): Repo skeleton
+- Task: Create Xcode app project `Wallet` (iOS 17) and local package `WalletKit` with every module from section 3. Each module gets a placeholder type and one passing test. Add `.swiftlint.yml`, `.swift-format`, and `.github/workflows/pr.yml`.
+- Done when: app builds and launches; `swift test` passes; CI green on a PR; importing one feature into another fails to build.
+
+### Phase 2 (week 2): Domain + design system
+- Task: `Money`, `Currency`, `FXRate`, transfer state machine in Domain with full tests. DesignSystem tokens and components: `AmountText`, `AmountField`, `PrimaryButton`, `TransactionRow`, `PINPad`, with previews.
+- Done when: rounding tests cover JPY (0), SGD (2), KWD (3); every state transition pair tested; components preview in dark mode and largest Dynamic Type.
+
+### Phase 3 (week 3): Backend + networking
+- Task: Vapor backend per section 7 with seed data and simulation headers (device binding and signing endpoints come in Phase 7). `NetworkingKit`: `HTTPClient`, interceptor chain (auth, idempotency, retry with backoff, request ID). `Networking`: Wallet endpoints and DTOs.
+- Done when: backend tests pass; a retried POST reuses the same idempotency key.
+
+### Phase 4 (week 4): Accounts
+- Task: AccountsFeature (balances per currency, paginated history, pull to refresh), online only (ADR-017). Runs on sandbox data in the app until Phase 5 provides a session. `WalletAPI` returns Domain types for accounts, transactions and recipients. Shared currency contract test (`contracts/currencies.json`).
+- Done when: offline shows a clear "You're offline" state with Retry and no balances; VoiceOver reads amounts with currency.
+
+### Phase 5 (week 5): Auth + session
+- Task: AuthFeature and `KeychainStore`: sandbox login, Face ID with PIN fallback, token refresh, inactivity auto-lock, background blur.
+- Done when: tokens only in Keychain; app locks after timeout; app switcher shows no balances.
+- Decisions: ADR-018 (Debug-only local networking), ADR-019 (app PIN). UI tests run on the in-app mock (`-uiTesting -mockServer`); `EndToEndUITests` runs against the real backend when credentials are passed in the environment. Sign-out wipes the PIN with the tokens; tokens without a PIN at launch are wiped. Every wipe also asks the server to revoke the tokens (`POST /v1/auth/logout`), without waiting for it. "Offline" is shown only when the device has no connection; a server that can't be reached says so. Auth errors are `UserFacingError`, like every other feature.
+
+### Phase 6 (week 6): Transfer flow + outbox
+- Task: TransferFeature: recipient → amount → live quote with fee breakdown and 30 s countdown → review → confirm → result. `TransferOutbox` actor resuming on launch.
+- Done when: double-tap Send creates one transfer; expiry re-quotes visibly; killing the app mid-transfer resumes on relaunch.
+- Carried over from the Phase 3 review: `APIError.isDefiniteRejection` judges one request, not the transfer. The outbox needs its own rule after an unknown outcome. A 404 when polling `GET /v1/transfers/{id}` can mean the create is still in flight, so resend the create with the same ID (safe, it is idempotent on the ID). `idempotency_mismatch` or `transfer_exists` on create means a transfer with this ID exists, so fetch it. Neither is "failed".
+- Carried over from Phase 4: write ADR-009 (SwiftData with `.complete` protection) with the outbox; Persistence is still a placeholder until then. `TransferDTO`, `MoneyDTO` and the transfer methods of `WalletAPI` still expose wire types: map them to a Domain `Transfer` and make them internal.
+- Carried over from Phase 5: the outbox learns about a refused refresh only through the calls it makes. Add a session state stream (`SessionManaging.stateUpdates`) so `AppCoordinator` reacts to a session ending in the background. Build transfer calls on the one shared `WalletAPI` in `AppEnvironment`.
+- Decisions: ADR-009 (SwiftData outbox, `.complete`), ADR-022 (unsigned confirm, recovery rule). Send is not re-authenticated yet: Phase 7's signing prompt (`.biometryCurrentSet`) becomes the re-auth. A pending transfer is deleted with the session, after a warning on sign-out. The transfer flow opens over Accounts as a full-screen cover; locking closes it, the outbox carries on. UI tests use an in-app mock bank (`-mockServer`) with `-quoteSeconds`, `-transferDelay` and `-keepMockSession`.
+
+### Phase 7 (week 7): Secure Enclave signing + App Attest
+- Task: Device binding and transaction signing per section 6 on iOS and backend. Public-key pinning with backup pin.
+- Done when: backend rejects tampered amount, reused nonce, expired nonce; changing Face ID enrolment forces re-binding.
+- Carried over from Phase 6: make the signature mandatory on `/confirm` (ADR-022) and re-authenticate Send through the signing key's Face ID prompt. Write ADR-011 (state machine + outbox) if it should be separate from ADR-009 and ADR-022.
+- Carried over from the Phase 3 review: the client checks that a quote matches what was asked, but trusts the server's maths (`target = round((source − fee) × rate)`, fee below source, expiry in the future). Decide whether the signed quote covers this or the client re-checks it. A pinning failure must not be reported as a user cancel: `URLSessionTransport` currently maps every `URLError.cancelled` to `CancellationError`.
+- Decisions: ADR-006 (pinning), ADR-008 (signing), ADR-023 (sign at Send; simulator key and `ATTEST_MODE=sandbox`), ADR-024 (App Attest with swift-certificates). Every sign-in binds the device; no Face ID binds without a key (view only). An approval older than 60 s fails the transfer as "approval expired". The client re-checks the quote's maths (`FXQuote.addsUp`). ADR-011 isn't written: ADR-009 and ADR-022 cover the outbox. UI tests use a mock signer (`-signing keyInvalidated|biometryNotSetUp` for the explanation screen).
+- Carried to Phase 9: fill the Release pins once a server exists; use the App Attest receipt's risk metric; turn on the App Attest capability for TestFlight.
+
+### Phase 8 (week 8): IdentitySDK
+- Task: Standalone package: MRZ input, BAC/PACE, read DG1 + DG2, passive authentication. Async public API, typed errors, DocC tutorial, sample app. Wire into OnboardingFeature.
+- Done when: a real passport reads on device; SDK builds alone; DocC builds without warnings.
+
+### Phase 9 (week 9): Production hardening
+- Task: Sentry with scrubbing, per-module loggers, screen-recording masking, feature flags with remote kill switch for transfers, XCUITest flows, `release.yml` + Fastlane → TestFlight.
+- Done when: a tag produces a TestFlight build; UI tests pass in CI; no PII in a forced test crash.
+
+### Phase 10 (week 10): Portfolio polish
+- Task: README as case study (problem, architecture diagram, security decisions linking ADRs, tradeoffs, changes at scale). Draft `docs/threat-model.md`.
+- Done when: 90-second demo recorded; TestFlight link public; README reviewed; first blog post drafted by the owner.

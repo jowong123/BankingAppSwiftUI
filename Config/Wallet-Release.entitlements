@@ -1,0 +1,10 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<plist version="1.0">
+<dict>
+	<!-- App Attest (ADR-024). The server accepts development keys only when it runs with
+	     APP_ATTEST_ENV=development. Needs the App Attest capability on the signing team. -->
+	<key>com.apple.developer.devicecheck.appattest-environment</key>
+	<string>production</string>
+</dict>
+</plist>

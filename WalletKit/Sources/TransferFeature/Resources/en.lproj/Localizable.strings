@@ -1,0 +1,81 @@
+/* Navigation titles and shared buttons. */
+"transfer.recipients.title" = "Send to";
+"transfer.amount.title" = "Amount";
+"transfer.review.title" = "Review";
+"transfer.cancel" = "Cancel";
+"transfer.retry" = "Retry";
+"transfer.done" = "Done";
+
+/* Recipient list. %@ is the currency code. */
+"transfer.recipients.empty" = "No saved recipients in another currency.";
+"transfer.recipients.subtitle" = "%@ account ending %@";
+
+/* Amount screen. %@ is the balance, e.g. "SGD 12,500.00". */
+"transfer.amount.youSend" = "You send";
+"transfer.amount.available" = "Available: %@";
+"transfer.amount.tooMuch" = "That's more than your balance.";
+"transfer.amount.continue" = "Continue";
+
+/* Review screen. */
+"transfer.review.youSend" = "You send";
+"transfer.review.fee" = "Fee";
+"transfer.review.rate" = "Rate";
+/* The exchange rate: 1 source currency code = rate, target currency code. */
+"transfer.review.rateValue" = "1 %@ = %@ %@";
+"transfer.review.theyReceive" = "%@ receives";
+"transfer.review.countdown.one" = "Rate held for 1 second";
+"transfer.review.countdown.other" = "Rate held for %d seconds";
+"transfer.review.requoting" = "Getting a new rate…";
+"transfer.review.rateUpdated.title" = "Rate updated";
+"transfer.review.rateUpdated.message" = "Check the new amounts before you send.";
+"transfer.review.rateUpdated.ok" = "OK";
+"transfer.review.send" = "Send";
+/* The Face ID prompt's reason. First %@ is the amount, e.g. "SGD 100.00"; second the recipient. */
+"transfer.review.approveReason" = "Approve sending %@ to %@";
+
+/* Approving with Face ID (SPEC section 6). */
+"transfer.signing.failed.title" = "Couldn't approve the transfer";
+"transfer.signing.failed.message" = "Face ID didn't confirm it's you. Nothing was sent; tap Send to try again.";
+"transfer.signing.keyInvalidated.title" = "Face ID has changed";
+"transfer.signing.keyInvalidated.message" = "Faces or fingerprints were added or removed on this iPhone, so it can no longer approve transfers. Sign in again to set it up with the current Face ID.";
+"transfer.signing.biometryNotSetUp.title" = "Set up Face ID to send money";
+"transfer.signing.biometryNotSetUp.message" = "Sending money needs Face ID or Touch ID. Turn it on in Settings, then sign in again.";
+"transfer.signing.signInAgain" = "Sign in again";
+"transfer.signing.close" = "Close";
+"transfer.signing.pendingSignOut.title" = "A transfer is still sending";
+"transfer.signing.pendingSignOut.message" = "Signing out now cancels it. Nothing is sent unless it already went through.";
+"transfer.signing.pendingSignOut.confirm" = "Sign out";
+
+/* Status screen. %@ is the recipient's name. */
+"transfer.status.sending.title" = "Sending";
+"transfer.status.sending.message" = "It's safe to leave the app. We'll finish sending.";
+"transfer.status.processing.title" = "On its way";
+"transfer.status.processing.message" = "%@ should get it shortly.";
+"transfer.status.completed.title" = "Sent";
+"transfer.status.completed.message" = "%@ has been paid.";
+"transfer.status.failed.quoteExpired.title" = "The rate changed";
+"transfer.status.failed.quoteExpired.message" = "Nothing was sent. Start again to get a new rate.";
+"transfer.status.failed.insufficientFunds.title" = "Not enough money";
+"transfer.status.failed.insufficientFunds.message" = "Nothing was sent. Your balance didn't cover this transfer.";
+"transfer.status.failed.declined.title" = "Transfer declined";
+"transfer.status.failed.declined.message" = "The money is back in your account.";
+"transfer.status.failed.approvalExpired.title" = "Approval expired";
+"transfer.status.failed.approvalExpired.message" = "Nothing was sent. The approval only lasts a minute; start again to send.";
+"transfer.status.failed.notApproved.title" = "Couldn't verify this transfer";
+"transfer.status.failed.notApproved.message" = "Nothing was sent. Start again, and approve with Face ID when asked.";
+"transfer.status.failed.rejected.title" = "Transfer didn't go through";
+"transfer.status.failed.rejected.message" = "Nothing was sent. Please try again.";
+
+/* Errors: a short title, then a message saying what to do (UserFacingError). */
+"transfer.error.offline.title" = "You're offline";
+"transfer.error.offline.message" = "Check your connection and try again.";
+"transfer.error.unavailable.title" = "Can't reach Wallet";
+"transfer.error.unavailable.message" = "Please try again in a moment.";
+"transfer.error.sessionExpired.title" = "Session expired";
+"transfer.error.sessionExpired.message" = "Sign in again to continue.";
+"transfer.error.amountNotAllowed.title" = "Amount not allowed";
+"transfer.error.amountNotAllowed.message" = "The amount must be more than the fee. Try a different amount.";
+"transfer.error.failed.title" = "Something went wrong";
+"transfer.error.failed.message" = "Please try again in a moment.";
+"transfer.error.storage.title" = "Couldn't save the transfer";
+"transfer.error.storage.message" = "Nothing was sent. Unlock your phone and try again.";

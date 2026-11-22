@@ -1,4 +1,3 @@
-@@ -0,0 +1,195 @@
 # Wallet
 
 A multi-currency wallet for iOS with a Wise-style send flow and bank-grade security.
@@ -154,7 +153,7 @@ A small Vapor service in Swift that does the **real** checks ([ADR-016](docs/adr
 | NetworkingKit | 47 | Retry, idempotency, token refresh, pinning |
 | App + UI | 54 | Sign in, send, quote expiry, offline, Face ID changed, kill and resume |
 
-To check that the backend tests really catch problems, I turned off the signature check on purpose, and 7 tests failed.
+**Do the tests actually catch bugs?** I turned off the server's signature and amount checks on purpose. 7 backend tests failed, including the one where an attacker changes the amount, so the tests really protect the money. (This is called mutation testing.)
 
 ---
 
@@ -172,16 +171,6 @@ To check that the backend tests really catch problems, I turned off the signatur
 
 ---
 
-## At scale, I'd add
-
-- **A step-up check for new devices,** such as SMS or a waiting period, against phished passwords.
-- **A server-verified PIN.**
-- **Tuist with binary caching** for a larger team.
-- **A hosted backend with real pins** (Release currently fails closed).
-- **App Attest's fraud risk metric and jailbreak signals** as risk scores.
-
----
-
 ## Quick start
 
 ```bash
@@ -189,7 +178,7 @@ cd backend && ATTEST_MODE=sandbox swift run WalletBackend serve
 ```
 
 1. Open `Wallet.xcodeproj` and run the **Wallet** scheme on an iOS 17+ simulator.
-2. In the Simulator menu, turn on **Features → Face ID → Enrolled**, Select Matched face when sending money.
+2. In the Simulator menu, turn on **Features → Face ID → Enrolled**. When sending money, choose **Features → Face ID → Matching Face**.
 3. Sign in with `demo@wallet.test` / `sandbox-demo`.
 
 More in the [development guide](docs/DEVELOPMENT.md). Every decision, with its alternatives, is in [`docs/adr/`](docs/adr).
